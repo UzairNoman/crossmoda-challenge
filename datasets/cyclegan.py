@@ -79,9 +79,9 @@ class CycleGANDataset(Dataset):
 
     def __getitem__(self, index):
         path_a = self._sample_image(self._imgs_a, index)
-        label_a = self.label_path + path_a[path_a.rfind('\cross'):].split('ceT1')[0] + 'Label.nii.gz'
+        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
         label_3d = read_nii_file(label_a)
-        tr = monai.transforms.Resize((256, 256,120))
+        tr = monai.transforms.Resize((256, 256))
         label = tr(label_3d[None])[0]
         #path_b = self._sample_image(self._imgs_b, index)
         return {'image': load_images([path_a], self._transform), 'label': label}

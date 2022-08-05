@@ -3,6 +3,7 @@
 
 import torch
 from torch import nn
+import torchvision.transforms as transforms
 
 from uvcgan.torch.select import get_norm_layer, get_activ_layer
 
@@ -170,7 +171,6 @@ class UNet(nn.Module):
         self.unet = unet_layers[0]
 
     def _construct_input_layer(self, activ):
-        print(f'{self.image_shape[0]} == {self.features_list[0]}')
         self.layer_input = nn.Sequential(
             nn.Conv2d(
                 self.image_shape[0], self.features_list[0],
@@ -203,7 +203,10 @@ class UNet(nn.Module):
 
     def forward(self, x):
         # x : (N, C, H, W)
-        print(x.shape)
+        x = x[:,0,:,:]
+        x = x.unsqueeze(0)
+        print(x)
+        #print(x.shape)
         y = self.layer_input(x)
         y = self.unet(y)
         y = self.layer_output(y)

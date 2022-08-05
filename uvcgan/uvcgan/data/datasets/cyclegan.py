@@ -62,6 +62,7 @@ class CycleGANDataset(Dataset):
         return result
 
     def _collect_files(self):
+        print(self._path_a)
         self._imgs_a = CycleGANDataset.find_images_in_dir(self._path_a)
         self._imgs_b = CycleGANDataset.find_images_in_dir(self._path_b)
 

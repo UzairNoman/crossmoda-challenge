@@ -24,5 +24,4 @@ if __name__ == "__main__":
     total_mean = mean/count
     total_var = (meansq/count) - (total_mean**2)
     total_std = torch.sqrt(total_var)
-
     print([total_mean,total_var,total_std])

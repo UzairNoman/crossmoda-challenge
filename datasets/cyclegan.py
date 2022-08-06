@@ -1,6 +1,8 @@
+from lib2to3.pygram import pattern_grammar
 import os
 import numpy as np
 from torchvision.datasets.folder import default_loader
+from torchvision import transforms
 from torch.utils.data import Dataset
 from torchvision.datasets.folder import IMG_EXTENSIONS
 from utils.helper import read_nii_file, sample_image, load_images
@@ -23,9 +25,9 @@ class CycleGANDataset(Dataset):
             subdir_a = 'trainA'
             subdir_b = 'trainB'
         else:
-            subdir_a = 'trainA'
+            subdir_a = 'testA'
             subdir_b = 'testB'
-        label_dir = 'labels'
+        label_dir = 'labelsA'
 
         self._align_train = align_train
         self._is_train    = is_train
@@ -74,15 +76,15 @@ class CycleGANDataset(Dataset):
         return self._len
 
     def _sample_image(self, images, index):
-        randomize = (self._is_train and (not self._align_train))
+        #randomize = (self._is_train and (not self._align_train))
+        randomize = False
         return sample_image(images, index, self._prg, randomize)
 
     def __getitem__(self, index):
         path_a = self._sample_image(self._imgs_a, index)
-        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
-        label_3d = read_nii_file(label_a)
-        tr = monai.transforms.Resize((256, 256))
-        label = tr(label_3d[None])[0]
+        #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
+        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace('ceT1','Label')
+        label = load_images([label_a], self._transform)
         #path_b = self._sample_image(self._imgs_b, index)
         return {'image': load_images([path_a], self._transform), 'label': label}
         #return load_images([path_a, path_b], self._transform)

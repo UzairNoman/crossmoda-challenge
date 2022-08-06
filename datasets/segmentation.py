@@ -8,8 +8,37 @@ from pprint import pprint
 from torch.utils.data import DataLoader
 
 from uvcgan.config import Args
-from uvcgan.models.generator import construct_generator
+from uvcgan.cgan import construct_model
 from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
+
+
+def i_t_i_translation():
+        device = get_torch_device_smart()
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        config = args.config
+        model = construct_model(
+        args.savedir, args.config, is_train = False, device = device
+        )
+        for m in model.models:
+          m = torch.nn.DataParallel(m)
+
+        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
+        # state_dict = ckpt
+
+        epoch = -1
+
+        if epoch == -1:
+            epoch = max(model.find_last_checkpoint_epoch(), 0)
+
+        print("Load checkpoint at epoch %s" % epoch)
+
+        seed_everything(args.config.seed)
+        model.load(epoch)
+        gen_ab = model.models.gen_ab
+        gen_ab.eval()
+        return gen_ab
+
+
 
 class SegModel(pl.LightningModule):
 
@@ -18,6 +47,10 @@ class SegModel(pl.LightningModule):
         self.model = smp.create_model(
             arch, encoder_name=encoder_name, in_channels=in_channels, classes=out_classes, **kwargs
         )
+        self.model = self.model
+
+        with torch.no_grad():
+            self.gen_ab = i_t_i_translation()
 
         # preprocessing parameteres for image
         params = smp.encoders.get_preprocessing_params(encoder_name)
@@ -32,37 +65,10 @@ class SegModel(pl.LightningModule):
         image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
-    def i_t_i_translation(self):
-        device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
-        config = args.config
-        model = construct_generator(
-            config.generator, config.image_shape, device
-        )
-
-        ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
-        state_dict = ckpt
-
-        epoch = 100
-
-        if epoch == -1:
-            epoch = max(model.find_last_checkpoint_epoch(), 0)
-
-        print("Load checkpoint at epoch %s" % epoch)
-
-        seed_everything(args.config.seed)
-        model.load(epoch)
-        gen_ab = model.models.gen_ab
-        gen_ab.eval()
-        return gen_ab
         
     def shared_step(self, batch, stage):
-        with torch.no_grad():
-            gen_ab = self.i_t_i_translation()
-            image = gen_ab(batch["image"])
-
+        image = self.gen_ab(batch['image'])
         #image = batch["image"]
-
         # Shape of the image should be (batch_size, num_channels, height, width)
         # if you work with grayscale images, expand channels dim to have [batch_size, 1, height, width]
         assert image.ndim == 4
@@ -83,8 +89,8 @@ class SegModel(pl.LightningModule):
 
         # Check that mask values in between 0 and 1, NOT 0 and 255 for binary segmentation
         assert mask.max() <= 1.0 and mask.min() >= 0
-
-        logits_mask = self.forward(image)
+        print(f'-^^^^^^^{image.shape}')
+        logits_mask = self.forward(image.detach())
         
         # Predicted mask contains logits, and loss_fn param `from_logits` is set to True
         loss = self.loss_fn(logits_mask, mask)

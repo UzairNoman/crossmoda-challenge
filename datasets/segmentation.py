@@ -7,7 +7,7 @@ import segmentation_models_pytorch as smp
 from pprint import pprint
 from torch.utils.data import DataLoader
 
-class PetModel(pl.LightningModule):
+class SegModel(pl.LightningModule):
 
     def __init__(self, arch, encoder_name, in_channels, out_classes, **kwargs):
         super().__init__()

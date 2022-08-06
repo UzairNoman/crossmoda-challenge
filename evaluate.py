@@ -19,7 +19,7 @@ import torchvision.transforms as transforms
 from uvcgan.models.generator import construct_generator
 from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
 import os
-from datasets.segmentation import PetModel
+from datasets.segmentation import SegModel
 import pytorch_lightning as pl
 
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     val_dl = DataLoader(val_ds, batch_size=110,shuffle=False)
 
     
-    model = PetModel("unet", "resnet34", in_channels=1, out_classes=1)
+    model = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
     trainer = pl.Trainer(
     #gpus=1, 
     max_epochs=5,

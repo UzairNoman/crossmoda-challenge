@@ -7,6 +7,10 @@ import segmentation_models_pytorch as smp
 from pprint import pprint
 from torch.utils.data import DataLoader
 
+from uvcgan.config import Args
+from uvcgan.models.generator import construct_generator
+from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
+
 class SegModel(pl.LightningModule):
 
     def __init__(self, arch, encoder_name, in_channels, out_classes, **kwargs):
@@ -28,10 +32,36 @@ class SegModel(pl.LightningModule):
         image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
+    def i_t_i_translation(self):
+        device = get_torch_device_smart()
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        config = args.config
+        model = construct_generator(
+            config.generator, config.image_shape, device
+        )
 
-    def shared_step(self, batch, stage):
+        ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
+        state_dict = ckpt
+
+        epoch = 100
+
+        if epoch == -1:
+            epoch = max(model.find_last_checkpoint_epoch(), 0)
+
+        print("Load checkpoint at epoch %s" % epoch)
+
+        seed_everything(args.config.seed)
+        model.load(epoch)
+        gen_ab = model.models.gen_ab
+        gen_ab.eval()
+        return gen_ab
         
-        image = batch["image"]
+    def shared_step(self, batch, stage):
+        with torch.no_grad():
+            gen_ab = self.i_t_i_translation()
+            image = gen_ab(batch["image"])
+
+        #image = batch["image"]
 
         # Shape of the image should be (batch_size, num_channels, height, width)
         # if you work with grayscale images, expand channels dim to have [batch_size, 1, height, width]

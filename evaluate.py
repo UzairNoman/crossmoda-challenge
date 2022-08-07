@@ -31,8 +31,8 @@ class ImageTranslation:
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
         )
-        for m in model.models:
-          m = torch.nn.DataParallel(m)
+        # for m in model.models:
+        #   m = torch.nn.DataParallel(m)
         # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
         # state_dict = ckpt
 
@@ -45,6 +45,7 @@ class ImageTranslation:
 
         seed_everything(args.config.seed)
         model.load(epoch)
+        print("TES")
         # gen_ab = model.models.gen_ab
         # gen_ab.eval()
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
 
 
 
-
+    #os.environ['CUDA_VISIBLE_DEVICES'] = '8' # NO CUDA DEVICES FOUND
     ######
     
     ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
@@ -64,15 +65,22 @@ if __name__ == "__main__":
     val_dl = DataLoader(val_ds, batch_size=110,shuffle=False)
 
     
-    model = SegModel("unet", "resnet34", in_channels=3, out_classes=1)
+    model = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
     trainer = pl.Trainer(
     gpus=8, 
     max_epochs=5,
-    accelerator='dp',
+    accelerator='cuda',
     )
 
     trainer.fit(
         model, 
-        train_dataloader=dl, 
+        train_dataloaders=dl, 
         val_dataloaders=val_dl,
     )
+
+    ## try ddp and ddp2 on plain seg and then add gen_ab = plain works but combined says cuda:1 ,6,3, LOCAL_RANK error on ddp2
+    # without for loop it works still
+    # specifying dp on plain seg = grad can be implicitly created only for scalar outputse
+    # but after wraping it in DataParallel class in SegModel, it get back to cuda0,1 err
+    # updated pl to 1.7 (myenv)
+

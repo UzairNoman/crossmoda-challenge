@@ -19,8 +19,8 @@ def i_t_i_translation():
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
         )
-        for m in model.models:
-          m = torch.nn.DataParallel(m)
+        # for m in model.models:
+        #   m = torch.nn.DataParallel(m)
 
         # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
         # state_dict = ckpt
@@ -47,22 +47,22 @@ class SegModel(pl.LightningModule):
         self.model = smp.create_model(
             arch, encoder_name=encoder_name, in_channels=in_channels, classes=out_classes, **kwargs
         )
-        self.model = self.model
-
+        # if not isinstance(self.model, torch.nn.DataParallel):
+        #     self.model = torch.nn.DataParallel(self.model)
         with torch.no_grad():
             self.gen_ab = i_t_i_translation()
 
         # preprocessing parameteres for image
         params = smp.encoders.get_preprocessing_params(encoder_name)
-        self.register_buffer("std", torch.tensor(params["std"]).view(1, 3, 1, 1))
-        self.register_buffer("mean", torch.tensor(params["mean"]).view(1, 3, 1, 1))
+        # self.register_buffer("std", torch.tensor(params["std"]).view(1, 3, 1, 1))
+        # self.register_buffer("mean", torch.tensor(params["mean"]).view(1, 3, 1, 1))
 
         # for image segmentation dice loss could be the best first choice
         self.loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
 
     def forward(self, image):
         # normalize image here
-        image = (image - self.mean) / self.std
+        #image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
         
@@ -118,6 +118,7 @@ class SegModel(pl.LightningModule):
         }
 
     def shared_epoch_end(self, outputs, stage):
+        print("Voila")
         # aggregate step metics
         tp = torch.cat([x["tp"] for x in outputs])
         fp = torch.cat([x["fp"] for x in outputs])

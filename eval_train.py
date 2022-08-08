@@ -41,7 +41,7 @@ def parse_option():
                         help='batch_size')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='num of workers to use')
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=5,
                         help='number of training epochs')
 
     # optimization
@@ -170,23 +170,20 @@ def set_optimizer(model):
     return torch.optim.Adam(model.parameters(), lr=0.0001)
 
 
-def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,logger):
+def train(train_loader, segmentation, criterion, optimizer, epoch,opt,logger):
     """one epoch training"""
-    model.eval()
     segmentation.train()
     running_loss = 0
  
     for idx, batch in enumerate(tqdm(train_loader)):
 
         images = batch['image'].float().cuda(non_blocking=True)
-        labels = batch['label'].cuda(non_blocking=True)
+        labels = batch['mask'].cuda(non_blocking=True)
         # warm-up learning rate
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
 
         # compute loss
-        with torch.no_grad():
-            features = model(images)
-        output = segmentation(features.detach())
+        output = segmentation(images)
         loss = criterion(output, labels)
 
         # SGD
@@ -303,14 +300,12 @@ def set_loaders(opt):
 def main():
     opt = parse_option()
     dl, val_dl = set_loaders(opt)
-    
-
         
 
-    gen_ab = i_t_i_translation()
+    #gen_ab = i_t_i_translation()
     #segmentation = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
     segmentation = smp.create_model(
-            arch= "unet", encoder_name="resnet34", in_channels=1, classes=1)
+            arch= "unet", encoder_name="resnet34", in_channels=3, classes=1)
     criterion = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
     #criterion = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
     
@@ -319,7 +314,7 @@ def main():
 
     for epoch in range(opt.epochs):
         adjust_learning_rate(opt, optimizer, epoch)
-        trained_model = train(dl,gen_ab,segmentation,criterion,optimizer,epoch,opt,logger)
+        trained_model = train(dl,segmentation,criterion,optimizer,epoch,opt,logger)
 
 
         tp = torch.cat([trained_model['tp']])

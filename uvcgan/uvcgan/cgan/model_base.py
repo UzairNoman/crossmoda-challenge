@@ -95,7 +95,7 @@ class ModelBase:
             return
 
         LOGGER.debug('Loading model from epoch %s', epoch)
-
+        print(self.model.__class__.__name__)
         load(self.models,     self.savedir, PREFIX_MODEL, epoch, self.device)
         load(self.optimizers, self.savedir, PREFIX_OPT,   epoch, self.device)
         load(self.schedulers, self.savedir, PREFIX_SCHED, epoch, self.device)

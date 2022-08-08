@@ -27,7 +27,7 @@ class CycleGANDataset(Dataset):
         else:
             subdir_a = 'testA'
             subdir_b = 'testB'
-        label_dir = 'labelsA'
+        label_dir = 'label_01'
 
         self._align_train = align_train
         self._is_train    = is_train

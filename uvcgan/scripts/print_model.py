@@ -12,6 +12,7 @@ def main(path):
     model  = construct_model(
         args.savedir, args.config, is_train = True, device = device
     )
+    print(model.__class__.__name__)
 
     epoch = max(model.find_last_checkpoint_epoch(), 0)
     print("Load checkpoint at epoch %s" % epoch)

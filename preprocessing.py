@@ -15,7 +15,7 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
     train, val = train_test_split(complete_input_folder, test_size=0.2, random_state=42)
     for fname in tqdm(train):
 
-        if not fname.endswith("hrT2.nii.gz"):
+        if not fname.endswith("Label.nii.gz"):
             continue
 
         n_file = os.path.join(input_folder, fname)
@@ -37,6 +37,12 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
             if resize:
                 tr = monai.transforms.Resize((resize, resize))
                 image = tr(image[None])[0]
+                print("Here is original")
+                print(image)
+
+                image[image > 0] = 1
+                print("Here is operated")
+                print(image)
 
             if filtered:
                 brain_mask = image > 0
@@ -50,8 +56,8 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
             #np.save(os.path.join(output_folder, f"{f_basename}_{i}.jpeg"), image)
 
 
-input_dir = r"data\target"
-output_dir = r"data\dummy1"
+input_dir = r"data\training_source"
+output_dir = r"data\label_01"
 axis = 2
 do_filter = False
 resize = 256

@@ -62,7 +62,7 @@ class SegModel(pl.LightningModule):
 
     def forward(self, image):
         # normalize image here
-        #image = (image - self.mean) / self.std
+        # image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
         
@@ -89,7 +89,6 @@ class SegModel(pl.LightningModule):
 
         # Check that mask values in between 0 and 1, NOT 0 and 255 for binary segmentation
         assert mask.max() <= 1.0 and mask.min() >= 0
-        print(f'-^^^^^^^{image.shape}')
         logits_mask = self.forward(image.detach())
         
         # Predicted mask contains logits, and loss_fn param `from_logits` is set to True

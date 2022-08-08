@@ -27,6 +27,8 @@ import segmentation_models_pytorch as smp
 import argparse
 import math
 import tensorboard_logger as tb_logger
+import pandas as pd
+from tqdm import tqdm
 
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
@@ -35,7 +37,7 @@ def parse_option():
                         help='print frequency')
     parser.add_argument('--save_freq', type=int, default=50,
                         help='save frequency')
-    parser.add_argument('--batch_size', type=int, default=512,
+    parser.add_argument('--batch_size', type=int, default=50,
                         help='batch_size')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='num of workers to use')
@@ -88,7 +90,7 @@ def parse_option():
     # set the path according to the environment
     if opt.data_folder is None:
         opt.data_folder = '../../DATA/'
-    opt.model_path = './saved_models/{}_models_seg'.format(opt.dataset)
+    opt.model_path = 'saved_models/{}_models_seg'.format(opt.dataset)
     opt.tb_path = 'logs/{}_models_seg'.format(opt.dataset)
     opt.save_folder = opt.model_path
     if not os.path.isdir(opt.save_folder):
@@ -113,13 +115,13 @@ def parse_option():
 
 def i_t_i_translation():
         device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
         config = args.config
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
         )
-        for m in model.models:
-          m = torch.nn.DataParallel(m)
+        # for m in model.models:
+        #   m = torch.nn.DataParallel(m)
 
         # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
         # state_dict = ckpt
@@ -168,13 +170,13 @@ def set_optimizer(model):
     return torch.optim.Adam(model.parameters(), lr=0.0001)
 
 
-def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt):
+def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,logger):
     """one epoch training"""
     model.eval()
     segmentation.train()
-
+    running_loss = 0
  
-    for idx, batch in enumerate(train_loader):
+    for idx, batch in enumerate(tqdm(train_loader)):
 
         images = batch['image'].float().cuda(non_blocking=True)
         labels = batch['label'].cuda(non_blocking=True)
@@ -192,6 +194,8 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt):
         loss.backward()
         optimizer.step()
 
+        print(f'Batch loss -> {loss}')
+
         # Lets compute metrics for some threshold
         # first convert mask values to probabilities, then 
         # apply thresholding
@@ -206,13 +210,27 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt):
         # these values will be aggregated in the end of an epoch
         tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), labels.long(), mode="binary")
 
-    return {
+
+        running_loss += loss.item()
+        # sum_loss += loss.item() * opt.batch_size
+        # count += batch_size
+
+
+        # print("[Epoch %d, Iteration %5d] loss: %.3f" % (epoch+1, idx+1, loss.item()))
+
+    
+    print("Epoch:{}/{}..".format(epoch+1, opt.epochs),
+                  "Train Loss: {:.3f}..".format(running_loss/len(train_loader)))
+
+    history = {
         "loss": loss,
+        'running_loss': running_loss,
         "tp": tp,
         "fp": fp,
         "fn": fn,
         "tn": tn,
     }
+    return history
 
 # def validate(val_loader, model, classifier, criterion, opt):
 #     """validation"""
@@ -255,28 +273,59 @@ def main():
     ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
     val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
 
-    dl = DataLoader(ds, batch_size=110,shuffle=False)
-    val_dl = DataLoader(val_ds, batch_size=110,shuffle=False)
+    dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
+    val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
 
     gen_ab = i_t_i_translation()
-    segmentation = SegModel("unet", "resnet34", in_channels=3, out_classes=1)
-    criterion = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-    optimizer = set_optimizer(segmentation.cuda())
-
+    #segmentation = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
+    segmentation = smp.create_model(
+            arch= "unet", encoder_name="resnet34", in_channels=1, classes=1)
+    #criterion = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+    criterion = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
     
+    optimizer = set_optimizer(segmentation.cuda())
+    logger = tb_logger.Logger(logdir=opt.tb_path, flush_secs=2)
 
     for epoch in range(opt.epochs):
         adjust_learning_rate(opt, optimizer, epoch)
-        trained_model = train(dl,gen_ab,segmentation,criterion,optimizer,epoch,opt)
+        trained_model = train(dl,gen_ab,segmentation,criterion,optimizer,epoch,opt,logger)
 
-        logger = tb_logger.Logger(logdir=opt.tb_path, flush_secs=2)
+
+        tp = torch.cat([trained_model['tp']])
+        fp = torch.cat([trained_model['fp']])
+        fn = torch.cat([trained_model['fn']])
+        tn = torch.cat([trained_model['tn']])
+
+        # per image IoU means that we first calculate IoU score for each image 
+        # and then compute mean over these scores
+        per_image_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro-imagewise")
+        
+        # dataset IoU means that we aggregate intersection and union over whole dataset
+        # and then compute IoU score. The difference between dataset_iou and per_image_iou scores
+        # in this particular case will not be much, however for dataset 
+        # with "empty" images (images without target class) a large gap could be observed. 
+        # Empty images influence a lot on per_image_iou and much less on dataset_iou.
+        dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro")
+        stage = 'train'
+        metrics = {
+            f"{stage}_per_image_iou": per_image_iou,
+            f"{stage}_dataset_iou": dataset_iou,
+        }
+
+
+        
+        logger.log_value("running_loss", trained_model['running_loss']/len(dl),epoch)
+        logger.log_value(f"{stage}_per_image_iou", metrics[f"{stage}_per_image_iou"], epoch)
+        logger.log_value(f"{stage}_dataset_iou", metrics[f"{stage}_dataset_iou"], epoch)
         logger.log_value('loss', trained_model['loss'], epoch)
-        logger.log_value('tp', trained_model['tp'], epoch)
-        logger.log_value('fp', trained_model['fp'], epoch)
-        logger.log_value('fn', trained_model['fn'], epoch)
-        logger.log_value('tn', trained_model['tn'], epoch)
+        # logger.log_value('tp', tp, epoch)
+        # logger.log_value('fp', fp, epoch)
+        # logger.log_value('fn', fn, epoch)
+        # logger.log_value('tn', tn, epoch)
         logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
-        print(trained_model)
+
+        torch.save(segmentation, f'{opt.save_folder}.pth')
+    print('FINISH.')
 
         # loss, val_acc = validate(val_dl, model, classifier, criterion, opt)
         # if val_acc > best_acc:

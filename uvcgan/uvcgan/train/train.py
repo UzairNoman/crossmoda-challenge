@@ -54,7 +54,6 @@ def train(args_dict):
     it_train, _ = get_data(
         args.config.data, args.config.batch_size, args.workers
     )
-    print(f'==> {next(iter(it_train))[0].shape}')
 
     print("Starting training...")
     print(args.config.to_json(indent = 4))

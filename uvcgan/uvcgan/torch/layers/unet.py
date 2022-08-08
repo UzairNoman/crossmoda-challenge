@@ -205,7 +205,6 @@ class UNet(nn.Module):
         # x : (N, C, H, W)
         x = x[:,0,:,:]
         x = x.unsqueeze(0)
-        print(x)
         #print(x.shape)
         y = self.layer_input(x)
         y = self.unet(y)

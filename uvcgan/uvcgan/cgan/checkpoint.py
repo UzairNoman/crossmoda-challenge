@@ -57,10 +57,12 @@ def load(named_dict, savedir, prefix, epoch, device):
         )
 
         if isinstance(v, torch.nn.DataParallel):
+            print("is it?")
             v.module.load_state_dict(
                 torch.load(load_path, map_location = device)
             )
         else:
+            print("idk")
             v.load_state_dict(
                 torch.load(load_path, map_location = device)
             )

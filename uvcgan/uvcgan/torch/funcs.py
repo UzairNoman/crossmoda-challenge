@@ -19,14 +19,14 @@ def get_torch_device_smart():
     return 'cpu'
 
 def prepare_model(model, device):
-    model = model.to(device)
+    # model = model.to(device)
 
-    if torch.cuda.device_count() > 1:
-        LOGGER.warning(
-            "Multiple (%d) GPUs found. Using Data Parallelism",
-            torch.cuda.device_count()
-        )
-        model = nn.DataParallel(model)
+    # if torch.cuda.device_count() > 1:
+    #     LOGGER.warning(
+    #         "Multiple (%d) GPUs found. Using Data Parallelism",
+    #         torch.cuda.device_count()
+    #     )
+    #     model = nn.DataParallel(model)
 
     return model
 

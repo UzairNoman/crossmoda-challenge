@@ -132,3 +132,5 @@ dmypy.json
 out/
 lightning_logs/
 data/*
+saved_models/*
+logs/*

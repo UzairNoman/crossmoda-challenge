@@ -134,3 +134,4 @@ lightning_logs/
 data/*
 saved_models/*
 logs/*
+data_files/*

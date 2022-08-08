@@ -59,7 +59,7 @@ def parse_option():
     # model dataset
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='crossmoda',
-                        choices=['cifar10', 'cifar100', 'svhn', 'isic'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'svhn', 'isic','crossmoda','cat'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
@@ -268,20 +268,51 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,log
 #     print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
 #     return losses.avg, top1.avg
 
+
+
+def set_loaders(opt):
+    if opt.dataset == 'cat':
+        # init train, val, test sets
+        from segmentation_models_pytorch.datasets import SimpleOxfordPetDataset
+        root = './data_files'
+        train_dataset = SimpleOxfordPetDataset(root, "train")
+        valid_dataset = SimpleOxfordPetDataset(root, "valid")
+        test_dataset = SimpleOxfordPetDataset(root, "test")
+
+        # It is a good practice to check datasets don`t intersects with each other
+        assert set(test_dataset.filenames).isdisjoint(set(train_dataset.filenames))
+        assert set(test_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
+        assert set(train_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
+
+        print(f"Train size: {len(train_dataset)}")
+        print(f"Valid size: {len(valid_dataset)}")
+        print(f"Test size: {len(test_dataset)}")
+
+        dl = DataLoader(train_dataset, batch_size=16, shuffle=True)
+        val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
+        test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
+    else:
+        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
+        val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+
+    return (dl,val_dl)
+
+
 def main():
     opt = parse_option()
-    ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-    val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+    dl, val_dl = set_loaders(opt)
+    
 
-    dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
-    val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+        
 
     gen_ab = i_t_i_translation()
     #segmentation = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
     segmentation = smp.create_model(
             arch= "unet", encoder_name="resnet34", in_channels=1, classes=1)
-    #criterion = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-    criterion = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
+    criterion = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+    #criterion = smp.losses.JaccardLoss(smp.losses.BINARY_MODE, from_logits=True)
     
     optimizer = set_optimizer(segmentation.cuda())
     logger = tb_logger.Logger(logdir=opt.tb_path, flush_secs=2)

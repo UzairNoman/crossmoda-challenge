@@ -14,32 +14,7 @@ from uvcgan.uvcgan.torch.funcs import get_torch_device_smart, seed_everything
 from uvcgan.uvcgan.cgan import construct_model
 from uvcgan.uvcgan.config import Args
 import segmentation_models_pytorch as smp
-def i_t_i_translation():
-    
-        device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
-        config = args.config
-        model = construct_model(
-        args.savedir, args.config, is_train = False, device = device
-        )
-        # for m in model.models:
-        #   m = torch.nn.DataParallel(m)
 
-        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
-        # state_dict = ckpt
-
-        epoch = -1
-
-        if epoch == -1:
-            epoch = max(model.find_last_checkpoint_epoch(), 0)
-
-        print("Load checkpoint at epoch %s" % epoch)
-
-        seed_everything(args.config.seed)
-        model.load(epoch)
-        gen_ab = model.models.gen_ab
-        gen_ab.eval()
-        return gen_ab.cuda()
 
 class BCELoss2d(nn.Module):
     
@@ -182,11 +157,10 @@ class Instructor:
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
         #criterion = BCELoss2d()
         criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset(f'{base_dir}/data',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset(f'{base_dir}/data',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
-        #gen_ab = i_t_i_translation()
         self._reset_records()
         for epoch in range(self.opt.num_epoch):
             train_loss = self._train(dl, criterion, optimizer)

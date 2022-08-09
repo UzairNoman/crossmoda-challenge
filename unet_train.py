@@ -155,8 +155,8 @@ class Instructor:
     def run(self):
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
-        #criterion = BCELoss2d()
-        criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
+        #criterion = BCELoss2d()MULTICLASS_MODE
+        criterion = smp.losses.DiceLoss(smp.losses.MULTILABEL_MODE, from_logits=True)
         ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         val_ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=1, type=int)
+    parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--num_epoch', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)

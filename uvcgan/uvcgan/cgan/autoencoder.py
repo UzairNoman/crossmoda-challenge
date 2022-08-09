@@ -1,9 +1,9 @@
 # pylint: disable=not-callable
 # NOTE: Mistaken lint:
 # E1102: self.encoder is not callable (not-callable)
-from uvcgan.torch.select             import select_optimizer, select_loss
-from uvcgan.torch.image_masking      import select_masking
-from uvcgan.models.generator         import construct_generator
+from uvcgan.uvcgan.torch.select             import select_optimizer, select_loss
+from uvcgan.uvcgan.torch.image_masking      import select_masking
+from uvcgan.uvcgan.models.generator         import construct_generator
 
 from .model_base import ModelBase
 

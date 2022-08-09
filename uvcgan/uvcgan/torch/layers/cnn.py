@@ -1,5 +1,5 @@
 from torch import nn
-from uvcgan.torch.select import extract_name_kwargs
+from uvcgan.uvcgan.torch.select import extract_name_kwargs
 
 def get_downsample_x2_conv2_layer(features, **kwargs):
     return (

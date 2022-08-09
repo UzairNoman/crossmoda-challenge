@@ -1,11 +1,11 @@
 import os
 import logging
 
-from uvcgan.consts import ROOT_OUTDIR
-from uvcgan.config import Args
-from uvcgan.cgan   import construct_model
+from uvcgan.uvcgan.consts import ROOT_OUTDIR
+from uvcgan.uvcgan.config import Args
+from uvcgan.uvcgan.cgan   import construct_model
 
-LOGGER = logging.getLogger('uvcgan.train')
+LOGGER = logging.getLogger('uvcgan.uvcgan.train')
 
 def load_base_model(model, transfer_config):
     try:

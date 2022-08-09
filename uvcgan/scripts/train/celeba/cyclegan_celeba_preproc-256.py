@@ -2,7 +2,7 @@ import argparse
 import os
 
 from uvcgan import ROOT_OUTDIR, train, join_dicts
-from uvcgan.utils.parsers import add_preset_name_parser
+from uvcgan.uvcgan.utils.parsers import add_preset_name_parser
 
 def parse_cmdargs():
     parser = argparse.ArgumentParser(

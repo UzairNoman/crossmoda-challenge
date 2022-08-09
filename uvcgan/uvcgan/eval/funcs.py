@@ -2,11 +2,11 @@ import os
 import math
 from itertools import islice
 
-from uvcgan.config            import Args
-from uvcgan.data              import get_data
-from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
-from uvcgan.cgan              import construct_model
-from uvcgan.utils.model_state import ModelState
+from uvcgan.uvcgan.config            import Args
+from uvcgan.uvcgan.data              import get_data
+from uvcgan.uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
+from uvcgan.uvcgan.cgan              import construct_model
+from uvcgan.uvcgan.utils.model_state import ModelState
 
 def slice_data_loader(loader, batch_size, n_samples = None):
     if n_samples is None:

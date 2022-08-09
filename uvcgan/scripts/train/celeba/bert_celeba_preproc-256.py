@@ -2,7 +2,7 @@ import argparse
 import os
 
 from uvcgan import ROOT_OUTDIR, train
-from uvcgan.utils.parsers import add_preset_name_parser, add_batch_size_parser
+from uvcgan.uvcgan.utils.parsers import add_preset_name_parser, add_batch_size_parser
 
 def parse_cmdargs():
     parser = argparse.ArgumentParser(description = 'Train Celeba BERT')

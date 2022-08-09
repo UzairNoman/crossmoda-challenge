@@ -6,9 +6,9 @@
 import logging
 from torch.nn import init
 
-from uvcgan.torch.select import extract_name_kwargs
+from uvcgan.uvcgan.torch.select import extract_name_kwargs
 
-LOGGER = logging.getLogger('uvcgan.base')
+LOGGER = logging.getLogger('uvcgan.uvcgan.base')
 
 def winit_func(m, init_type = 'normal', init_gain = 0.2):
     classname = m.__class__.__name__

@@ -7,9 +7,9 @@ import segmentation_models_pytorch as smp
 from pprint import pprint
 from torch.utils.data import DataLoader
 
-from uvcgan.config import Args
-from uvcgan.cgan import construct_model
-from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
+from uvcgan.uvcgan.config import Args
+from uvcgan.uvcgan.cgan import construct_model
+from uvcgan.uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
 
 
 def i_t_i_translation():

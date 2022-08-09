@@ -4,7 +4,7 @@
 import torch
 from torch import nn
 
-from uvcgan.torch.select import get_norm_layer, get_activ_layer
+from uvcgan.uvcgan.torch.select import get_norm_layer, get_activ_layer
 
 def calc_tokenized_size(image_shape, token_size):
     # image_shape : (C, H, W)

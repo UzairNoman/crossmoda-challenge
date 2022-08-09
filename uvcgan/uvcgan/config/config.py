@@ -2,14 +2,14 @@ import json
 import logging
 import os
 
-from uvcgan.consts    import CONFIG_NAME
+from uvcgan.uvcgan.consts    import CONFIG_NAME
 
 from .config_base     import ConfigBase
 from .data_config     import DataConfig
 from .model_config    import ModelConfig
 from .transfer_config import TransferConfig
 
-LOGGER = logging.getLogger('uvcgan.config')
+LOGGER = logging.getLogger('uvcgan.uvcgan.config')
 
 class Config(ConfigBase):
     # pylint: disable=too-many-instance-attributes

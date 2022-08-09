@@ -4,7 +4,7 @@
 import numpy as np
 from torch import nn
 
-from uvcgan.torch.layers.transformer import (
+from uvcgan.uvcgan.torch.layers.transformer import (
     calc_tokenized_size, ViTInput, TransformerEncoder, img_to_tokens,
     img_from_tokens
 )

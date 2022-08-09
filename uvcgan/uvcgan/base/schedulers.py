@@ -4,7 +4,7 @@
 # Please see `uvcgan/base/LICENSE` for copyright attribution and LICENSE
 
 from torch.optim           import lr_scheduler
-from uvcgan.torch.select import extract_name_kwargs
+from uvcgan.uvcgan.torch.select import extract_name_kwargs
 
 def linear_scheduler(optimizer, epochs_warmup, epochs_anneal, verbose = True):
 

@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torchvision.transforms as transforms
 
-from uvcgan.torch.select import get_norm_layer, get_activ_layer
+from uvcgan.uvcgan.torch.select import get_norm_layer, get_activ_layer
 
 from .cnn import get_downsample_x2_layer, get_upsample_x2_layer
 

@@ -1,7 +1,7 @@
 import torchvision
 from torchvision import transforms
 
-from uvcgan.torch.select import extract_name_kwargs
+from uvcgan.uvcgan.torch.select import extract_name_kwargs
 
 TRANSFORM_DICT = {
     'center-crop'            : transforms.CenterCrop,

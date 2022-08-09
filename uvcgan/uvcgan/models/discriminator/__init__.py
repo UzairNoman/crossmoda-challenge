@@ -1,6 +1,6 @@
-from uvcgan.base.networks    import select_base_discriminator
-from uvcgan.base.weight_init import init_weights
-from uvcgan.torch.funcs      import prepare_model
+from uvcgan.uvcgan.base.networks    import select_base_discriminator
+from uvcgan.uvcgan.base.weight_init import init_weights
+from uvcgan.uvcgan.torch.funcs      import prepare_model
 
 def select_discriminator(name, **kwargs):
     return select_base_discriminator(name, **kwargs)

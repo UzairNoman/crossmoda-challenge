@@ -3,7 +3,7 @@ import torch
 
 import torchvision
 
-from uvcgan.consts      import ROOT_DATA
+from uvcgan.uvcgan.consts      import ROOT_DATA
 from .datasets.celeba   import CelebaDataset
 from .datasets.cyclegan import CycleGANDataset
 from .transforms        import select_transform

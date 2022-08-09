@@ -5,7 +5,7 @@ import numpy as np
 
 from torch import nn
 
-LOGGER = logging.getLogger('uvcgan.torch')
+LOGGER = logging.getLogger('uvcgan.uvcgan.torch')
 
 def seed_everything(seed):
     torch.manual_seed(seed)

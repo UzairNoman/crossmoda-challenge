@@ -12,7 +12,7 @@ setuptools.setup(
     ],
     description      = "UVCGAN paper code",
     packages         = setuptools.find_packages(
-        include = [ 'uvcgan', 'uvcgan.*' ]
+        include = [ 'uvcgan', 'uvcgan.uvcgan.*' ]
     ),
     install_requires = [ 'numpy', 'pandas', 'tqdm', 'Pillow' ],
 )

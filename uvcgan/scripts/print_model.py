@@ -2,9 +2,9 @@
 
 import sys
 
-from uvcgan.config      import Args
-from uvcgan.torch.funcs import get_torch_device_smart
-from uvcgan.cgan        import construct_model
+from uvcgan.uvcgan.config      import Args
+from uvcgan.uvcgan.torch.funcs import get_torch_device_smart
+from uvcgan.uvcgan.cgan        import construct_model
 
 def main(path):
     args   = Args.load(path)

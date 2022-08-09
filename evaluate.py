@@ -1,4 +1,4 @@
-from uvcgan.config import Args
+from uvcgan.uvcgan.config import Args
 import torch
 import fnmatch
 import os
@@ -16,12 +16,12 @@ from monai.transforms import AddChannel, Compose, Resize, ScaleIntensity, ToTens
 from torch.utils.data import DataLoader, Dataset
 from datasets.cyclegan import CycleGANDataset
 import torchvision.transforms as transforms
-from uvcgan.models.generator import construct_generator
-from uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
+from uvcgan.uvcgan.models.generator import construct_generator
+from uvcgan.uvcgan.torch.funcs       import get_torch_device_smart, seed_everything
 import os
 from datasets.segmentation import SegModel
 import pytorch_lightning as pl
-from uvcgan.cgan import construct_model
+from uvcgan.uvcgan.cgan import construct_model
 
 class ImageTranslation:
     def __init__(self):

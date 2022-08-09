@@ -8,10 +8,10 @@ import tqdm
 import numpy as np
 from PIL import Image
 
-from uvcgan.eval.funcs import (
+from uvcgan.uvcgan.eval.funcs import (
     load_eval_model_dset_from_cmdargs, tensor_to_image, slice_data_loader
 )
-from uvcgan.utils.parsers import (
+from uvcgan.uvcgan.utils.parsers import (
     add_standard_eval_parsers, add_plot_extension_parser
 )
 

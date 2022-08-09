@@ -7,7 +7,7 @@ import logging
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from uvcgan.base.schedulers import get_scheduler
+from uvcgan.uvcgan.base.schedulers import get_scheduler
 from .named_dict import NamedDict
 from .checkpoint import find_last_checkpoint_epoch, save, load
 
@@ -15,7 +15,7 @@ PREFIX_MODEL = 'net'
 PREFIX_OPT   = 'opt'
 PREFIX_SCHED = 'sched'
 
-LOGGER = logging.getLogger('uvcgan.cgan')
+LOGGER = logging.getLogger('uvcgan.uvcgan.cgan')
 
 class ModelBase:
     # pylint: disable=too-many-instance-attributes

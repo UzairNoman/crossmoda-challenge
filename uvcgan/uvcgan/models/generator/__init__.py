@@ -1,6 +1,6 @@
-from uvcgan.base.networks    import select_base_generator
-from uvcgan.base.weight_init import init_weights
-from uvcgan.torch.funcs      import prepare_model
+from uvcgan.uvcgan.base.networks    import select_base_generator
+from uvcgan.uvcgan.base.weight_init import init_weights
+from uvcgan.uvcgan.torch.funcs      import prepare_model
 
 from .vit       import ViTGenerator
 from .vitunet   import ViTUNetGenerator

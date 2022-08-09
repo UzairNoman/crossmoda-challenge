@@ -1,11 +1,11 @@
 from itertools import islice
 import tqdm
 
-from uvcgan.config      import Args
-from uvcgan.data        import get_data
-from uvcgan.torch.funcs import get_torch_device_smart, seed_everything
-from uvcgan.cgan        import construct_model
-from uvcgan.utils.log   import setup_logging
+from uvcgan.uvcgan.config      import Args
+from uvcgan.uvcgan.data        import get_data
+from uvcgan.uvcgan.torch.funcs import get_torch_device_smart, seed_everything
+from uvcgan.uvcgan.cgan        import construct_model
+from uvcgan.uvcgan.utils.log   import setup_logging
 
 from .metrics   import LossMetrics
 from .callbacks import TrainingHistory

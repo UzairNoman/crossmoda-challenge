@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, Dataset
 from uvcgan.torch.funcs import get_torch_device_smart, seed_everything
 from uvcgan.cgan import construct_model
 from uvcgan.config import Args
-
+import segmentation_models_pytorch as smp
 def i_t_i_translation():
     
         device = get_torch_device_smart()
@@ -48,6 +48,8 @@ class BCELoss2d(nn.Module):
         self.bce_loss = nn.BCELoss()
     
     def forward(self, predict, target):
+        # print(f'=>>{predict.shape}')
+        # print(f'=&&{target.shape}')
         predict = predict.view(-1)
         target = target.view(-1)
         return self.bce_loss(predict, target)
@@ -144,10 +146,10 @@ class Instructor:
         for i_batch, sample_batched in enumerate(train_dataloader):
             inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device)
 
-            
             predict = self.model(inputs)
             
             optimizer.zero_grad()
+            
             loss = criterion(predict, target)
             loss.backward()
             optimizer.step()
@@ -178,12 +180,13 @@ class Instructor:
     def run(self):
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
-        criterion = BCELoss2d()
+        #criterion = BCELoss2d()
+        criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
         ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
-        gen_ab = i_t_i_translation()
+        #gen_ab = i_t_i_translation()
         self._reset_records()
         for epoch in range(self.opt.num_epoch):
             train_loss = self._train(dl, criterion, optimizer)
@@ -226,7 +229,7 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--num_epoch', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--lr', default=1e-3, type=float)

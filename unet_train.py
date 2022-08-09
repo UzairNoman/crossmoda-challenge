@@ -10,9 +10,9 @@ import torch.nn as nn
 from datasets.cyclegan import CycleGANDataset
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
-from uvcgan.torch.funcs import get_torch_device_smart, seed_everything
-from uvcgan.cgan import construct_model
-from uvcgan.config import Args
+from uvcgan.uvcgan.torch.funcs import get_torch_device_smart, seed_everything
+from uvcgan.uvcgan.cgan import construct_model
+from uvcgan.uvcgan.config import Args
 import segmentation_models_pytorch as smp
 def i_t_i_translation():
     

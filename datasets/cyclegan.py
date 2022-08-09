@@ -27,7 +27,7 @@ class CycleGANDataset(Dataset):
         else:
             subdir_a = 'testA'
             subdir_b = 'testB'
-        label_dir = 'label_01'
+        label_dir = 'label_npy'
 
         self._align_train = align_train
         self._is_train    = is_train
@@ -83,8 +83,13 @@ class CycleGANDataset(Dataset):
     def __getitem__(self, index):
         path_a = self._sample_image(self._imgs_a, index)
         #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
-        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace('ceT1','Label')
-        label = load_images([label_a], self._transform)
+        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace('ceT1','Label').replace('jpeg','npy')
+        label = np.load(label_a)
+        to_tensor = transforms.ToTensor()
+        label = to_tensor(label)
+        #label = load_images([label_a], self._transform,label=True)
+        print(f"++> {label.shape}")
         #path_b = self._sample_image(self._imgs_b, index)
-        return {'image': load_images([path_a], self._transform), 'label': label}
+        
+        return {'image': load_images([path_a], self._transform), 'label': label, 'file_name': path_a[path_a.rfind('cross'):]}
         #return load_images([path_a, path_b], self._transform)

@@ -110,10 +110,27 @@ def parse_option():
 
 
 
+class AverageMeter():
+    """Computes and stores the average and current value"""
 
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val 
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 def i_t_i_translation():
+    
         device = get_torch_device_smart()
         args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
         config = args.config
@@ -172,13 +189,11 @@ def set_optimizer(model):
 
 def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,logger):
     """one epoch training"""
-    model.eval()
-    segmentation.train()
-    running_loss = 0
+    losses = AverageMeter()
  
     for idx, batch in enumerate(tqdm(train_loader)):
 
-        images = batch['image'].float().cuda(non_blocking=True)
+        images = batch['image'].cuda(non_blocking=True)
         labels = batch['label'].cuda(non_blocking=True)
         # warm-up learning rate
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
@@ -211,7 +226,8 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,log
         tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), labels.long(), mode="binary")
 
 
-        running_loss += loss.item()
+        losses.update(loss.item(), labels.shape[0])
+
         # sum_loss += loss.item() * opt.batch_size
         # count += batch_size
 
@@ -220,11 +236,10 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,log
 
     
     print("Epoch:{}/{}..".format(epoch+1, opt.epochs),
-                  "Train Loss: {:.3f}..".format(running_loss/len(train_loader)))
+                  "Train Loss: {:.3f}..".format(losses.avg))
 
     history = {
-        "loss": loss,
-        'running_loss': running_loss,
+        "loss": losses.avg,
         "tp": tp,
         "fp": fp,
         "fn": fn,
@@ -292,8 +307,8 @@ def set_loaders(opt):
         val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
         test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
     else:
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((224,224)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
 
@@ -317,7 +332,9 @@ def main():
     optimizer = set_optimizer(segmentation.cuda())
     logger = tb_logger.Logger(logdir=opt.tb_path, flush_secs=2)
 
+    gen_ab.eval()
     for epoch in range(opt.epochs):
+        #segmentation.train()
         adjust_learning_rate(opt, optimizer, epoch)
         trained_model = train(dl,gen_ab,segmentation,criterion,optimizer,epoch,opt,logger)
 
@@ -345,10 +362,9 @@ def main():
 
 
         
-        logger.log_value("running_loss", trained_model['running_loss']/len(dl),epoch)
+        logger.log_value("loss", trained_model['loss'],epoch)
         logger.log_value(f"{stage}_per_image_iou", metrics[f"{stage}_per_image_iou"], epoch)
         logger.log_value(f"{stage}_dataset_iou", metrics[f"{stage}_dataset_iou"], epoch)
-        logger.log_value('loss', trained_model['loss'], epoch)
         # logger.log_value('tp', tp, epoch)
         # logger.log_value('fp', fp, epoch)
         # logger.log_value('fn', fn, epoch)

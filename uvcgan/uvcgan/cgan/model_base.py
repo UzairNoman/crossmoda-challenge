@@ -102,7 +102,7 @@ class ModelBase:
 
         self.epoch = epoch
         self._load_model_state(epoch)
-
+        print(self.model.__class__.__name__)
     def save(self, epoch = None):
         LOGGER.debug('Saving model at epoch %s', epoch)
 

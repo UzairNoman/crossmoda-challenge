@@ -67,9 +67,9 @@ if __name__ == "__main__":
     
     model = SegModel("unet", "resnet34", in_channels=1, out_classes=1)
     trainer = pl.Trainer(
-    gpus=8, 
-    max_epochs=5,
-    accelerator='cuda',
+        gpus=2, 
+        max_epochs=100,
+        accelerator='cuda',
     )
 
     trainer.fit(
@@ -83,4 +83,12 @@ if __name__ == "__main__":
     # specifying dp on plain seg = grad can be implicitly created only for scalar outputse
     # but after wraping it in DataParallel class in SegModel, it get back to cuda0,1 err
     # updated pl to 1.7 (myenv)
+
+    # still same err with DataParallel nothing change on retrain, so training now with gpu=1 is still seems okay, loss is 0.9 as usuall
+    # cat trainig note1.txt shows constant 0.4 each epoch but in local machine it is improving like hell 0.07 batch loss during the first epoch.
+    #meaning: could be code problem as 0.416 is not good but on improving on local code.
+
+    # next: convert binary_segment nb file to py and run that on cat data to check and cancel in half. Secondly, make change to it to take cet1 with labels and verify if improved
+
+
 

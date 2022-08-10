@@ -14,7 +14,44 @@ from uvcgan.uvcgan.torch.funcs import get_torch_device_smart, seed_everything
 from uvcgan.uvcgan.cgan import construct_model
 from uvcgan.uvcgan.config import Args
 import segmentation_models_pytorch as smp
+import numpy as np
+import math
+from torchmetrics.functional import dice_score
 
+def adjust_learning_rate(args,optimizer, epoch):
+    lr = args.lr
+    eta_min = lr * (args.lr_decay_rate ** 3)
+    lr = eta_min + (lr - eta_min) * (
+            1 + math.cos(math.pi * epoch / args.epochs)) / 2
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+def i_t_i_translation():
+    
+        device = get_torch_device_smart()
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        config = args.config
+        model = construct_model(
+        args.savedir, args.config, is_train = False, device = device
+        )
+        # for m in model.models:
+        #   m = torch.nn.DataParallel(m)
+
+        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
+        # state_dict = ckpt
+
+        epoch = -1
+
+        if epoch == -1:
+            epoch = max(model.find_last_checkpoint_epoch(), 0)
+
+        print("Load checkpoint at epoch %s" % epoch)
+
+        seed_everything(args.config.seed)
+        model.load(epoch)
+        gen_ab = model.models.gen_ab
+        gen_ab.eval()
+        return gen_ab.cuda()
 
 class BCELoss2d(nn.Module):
     
@@ -23,20 +60,27 @@ class BCELoss2d(nn.Module):
         self.bce_loss = nn.BCELoss()
     
     def forward(self, predict, target):
-        # print(f'=>>{predict.shape}')
-        # print(f'=&&{target.shape}')
         predict = predict.view(-1)
         target = target.view(-1)
         return self.bce_loss(predict, target)
 
-def dice_coeff(predict, target):
-    smooth = 0.001
-    batch_size = predict.size(0)
-    predict = (predict > 0.5).float()
-    m1 = predict.view(batch_size, -1)
-    m2 = target.view(batch_size, -1)
-    intersection = (m1 * m2).sum(-1)
-    return ((2.0 * intersection + smooth) / (m1.sum(-1) + m2.sum(-1) + smooth)).mean()
+# def dice_coeff(predict, target):
+#     smooth = 0.001
+#     batch_size = predict.size(0)
+#     predict = (predict > 0.5).float()
+#     m1 = predict.view(batch_size, -1)
+#     m2 = target.view(batch_size, -1)
+#     intersection = (m1 * m2).sum(-1)
+#     return ((2.0 * intersection + smooth) / (m1.sum(-1) + m2.sum(-1) + smooth)).mean()
+def dice_coeff(y_pred, y_true, epsilon=1e-6):
+    y_true_flatten = np.asarray(y_true.detach().cpu()).astype(np.bool)
+    y_pred_flatten = np.asarray(y_pred.detach().cpu()).astype(np.bool)
+
+    if not np.sum(y_true_flatten) + np.sum(y_pred_flatten):
+        return 1.0
+
+    return (2. * np.sum(y_true_flatten * y_pred_flatten)) /\
+           (np.sum(y_true_flatten) + np.sum(y_pred_flatten) + epsilon)
 
 class Instructor:
     ''' Model training and evaluation '''
@@ -47,7 +91,7 @@ class Instructor:
             self.model.load_state_dict(torch.load('./state_dict/{:s}'.format(opt.checkpoint), map_location=self.opt.device))
             print('checkpoint {:s} has been loaded'.format(opt.checkpoint))
         if opt.multi_gpu == 'on':
-            self.model = torch.nn.DataParallel(self.model)
+            self.model = torch.nn.DataParallel(self.model)   # 1,174,174 | 3,174,174
         self.model = self.model.to(opt.device)
         self._print_args()
     
@@ -119,9 +163,9 @@ class Instructor:
         self.model.train()
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         for i_batch, sample_batched in enumerate(train_dataloader):
-            inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device)
-
+            inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].long().to(self.opt.device)
             predict = self.model(inputs)
+            target = target.squeeze()
             
             optimizer.zero_grad()
             
@@ -143,10 +187,12 @@ class Instructor:
         val_loss, val_dice, n_total = 0, 0, 0
         with torch.no_grad():
             for sample_batched in val_dataloader:
-                inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device)
+                inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].long().to(self.opt.device)
                 predict = self.model(inputs)
+                target = target.squeeze()
                 loss = criterion(predict, target)
-                dice = dice_coeff(predict, target)
+                #dice = dice_coeff(predict, target)
+                dice = dice_score(predict, target)
                 val_loss += loss.item() * len(sample_batched)
                 val_dice += dice.item() * len(sample_batched)
                 n_total += len(sample_batched)
@@ -155,19 +201,21 @@ class Instructor:
     def run(self):
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
-        #criterion = BCELoss2d()MULTICLASS_MODE
-        criterion = smp.losses.DiceLoss(smp.losses.MULTILABEL_MODE, from_logits=True)
-        ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        # criterion = BCELoss2d()#MULTICLASS_MODE
+        #criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
+        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+        #gen_ab = i_t_i_translation()
         self._reset_records()
-        for epoch in range(self.opt.num_epoch):
+        for epoch in range(self.opt.epochs):
+            adjust_learning_rate(opt, optimizer, epoch)
             train_loss = self._train(dl, criterion, optimizer)
             val_loss, val_dice = self._evaluation(val_dl, criterion)
-            print(train_loss)
             self._update_records(epoch, train_loss, val_loss, val_dice)
-            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.num_epoch, train_loss, val_loss, val_dice))
+            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.epochs, train_loss, val_loss, val_dice))
         self._draw_records()
     
     def inference(self):
@@ -203,10 +251,12 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=8, type=int)
-    parser.add_argument('--num_epoch', default=100, type=int)
+    parser.add_argument('--batch_size', default=256, type=int)
+    parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
-    parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--lr', default=0.1, type=float)
+    parser.add_argument('--lr_decay_rate', type=float, default=0.1,
+                        help='decay rate for learning rate')
     parser.add_argument('--l2reg', default=1e-5, type=float)
     parser.add_argument('--use_bilinear', default=False, type=float)
     ''' For inference '''

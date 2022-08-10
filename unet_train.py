@@ -204,8 +204,8 @@ class Instructor:
         # criterion = BCELoss2d()#MULTICLASS_MODE
         #criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
         criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset(f'/content/drive/MyDrive/CrossModa/data',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
         #gen_ab = i_t_i_translation()

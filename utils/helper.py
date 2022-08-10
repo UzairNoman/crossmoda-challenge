@@ -34,7 +34,6 @@ def load_images(paths, transform = None, label = False):
 
     if transform is not None:
         result = apply_if_not_none(transform, result) 
-    print(f"$$$> {result.shape}")
     return result
 
 def draw_image(image):

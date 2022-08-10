@@ -14,6 +14,52 @@ from uvcgan.torch.funcs import get_torch_device_smart, seed_everything
 from uvcgan.cgan import construct_model
 from uvcgan.config import Args
 import segmentation_models_pytorch as smp
+import numpy as np
+import math
+from torchmetrics.functional import dice_score
+# from torchgeometry.losses import DiceLoss
+# from torchmetrics import Dice
+from monai.losses.dice import DiceLoss, GeneralizedWassersteinDiceLoss, one_hot
+
+def set_loaders(opt):
+    if opt.dataset == 'cat':
+        # init train, val, test sets
+        from segmentation_models_pytorch.datasets import SimpleOxfordPetDataset
+        root = './data_files'
+        train_dataset = SimpleOxfordPetDataset(root, "train")
+        valid_dataset = SimpleOxfordPetDataset(root, "valid")
+        test_dataset = SimpleOxfordPetDataset(root, "test")
+
+        # It is a good practice to check datasets don`t intersects with each other
+        assert set(test_dataset.filenames).isdisjoint(set(train_dataset.filenames))
+        assert set(test_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
+        assert set(train_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
+
+        print(f"Train size: {len(train_dataset)}")
+        print(f"Valid size: {len(valid_dataset)}")
+        print(f"Test size: {len(test_dataset)}")
+
+        dl = DataLoader(train_dataset, batch_size=16, shuffle=True)
+        val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
+        test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
+    else:
+        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
+        val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+
+    return (dl,val_dl)
+
+
+
+def adjust_learning_rate(args,optimizer, epoch):
+    lr = args.lr
+    eta_min = lr * (args.lr_decay_rate ** 3)
+    lr = eta_min + (lr - eta_min) * (
+            1 + math.cos(math.pi * epoch / args.epochs)) / 2
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
 def i_t_i_translation():
     
         device = get_torch_device_smart()
@@ -48,8 +94,6 @@ class BCELoss2d(nn.Module):
         self.bce_loss = nn.BCELoss()
     
     def forward(self, predict, target):
-        # print(f'=>>{predict.shape}')
-        # print(f'=&&{target.shape}')
         predict = predict.view(-1)
         target = target.view(-1)
         return self.bce_loss(predict, target)
@@ -62,17 +106,28 @@ def dice_coeff(predict, target):
     m2 = target.view(batch_size, -1)
     intersection = (m1 * m2).sum(-1)
     return ((2.0 * intersection + smooth) / (m1.sum(-1) + m2.sum(-1) + smooth)).mean()
+# def dice_coeff(y_pred, y_true, epsilon=1e-6):
+#     y_true_flatten = np.asarray(y_true.detach().cpu()).astype(np.bool)
+#     y_pred_flatten = np.asarray(y_pred.detach().cpu()).astype(np.bool)
+
+#     if not np.sum(y_true_flatten) + np.sum(y_pred_flatten):
+#         return 1.0
+
+#     return (2. * np.sum(y_true_flatten * y_pred_flatten)) /\
+#            (np.sum(y_true_flatten) + np.sum(y_pred_flatten) + epsilon)
 
 class Instructor:
     ''' Model training and evaluation '''
     def __init__(self, opt):
         self.opt = opt    
         self.model = UNet(n_channels=1, n_classes=3, bilinear=self.opt.use_bilinear)
+        pytorch_total_params = sum(p.numel() for p in self.model.parameters())
+        print(f'Model param: {pytorch_total_params}')
         if opt.checkpoint:
             self.model.load_state_dict(torch.load('./state_dict/{:s}'.format(opt.checkpoint), map_location=self.opt.device))
             print('checkpoint {:s} has been loaded'.format(opt.checkpoint))
         if opt.multi_gpu == 'on':
-            self.model = torch.nn.DataParallel(self.model)
+            self.model = torch.nn.DataParallel(self.model)   # 1,174,174 | 3,174,174
         self.model = self.model.to(opt.device)
         self._print_args()
     
@@ -140,14 +195,21 @@ class Instructor:
             f.write(report)
         print('report saved:', './logs/{:s}_log.txt'.format(timestamp))
     
-    def _train(self, train_dataloader, criterion, optimizer):
+    def _train(self, train_dataloader, criterion, optimizer,opt):
         self.model.train()
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         for i_batch, sample_batched in enumerate(train_dataloader):
-            inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device)
-
+            inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device) # .long()
             predict = self.model(inputs)
+            #target = target.squeeze()
+
+            # target_idx = target
+            # target = one_hot(target_idx[:, None, ...], num_classes=3)
+            # print(target.shape)
+            # target = target.requires_grad_().to(self.opt.device)
             
+        
+
             optimizer.zero_grad()
             
             loss = criterion(predict, target)
@@ -168,10 +230,13 @@ class Instructor:
         val_loss, val_dice, n_total = 0, 0, 0
         with torch.no_grad():
             for sample_batched in val_dataloader:
-                inputs, target = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device)
+                inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device) # .long()
                 predict = self.model(inputs)
+                #target = target.squeeze()
                 loss = criterion(predict, target)
-                dice = dice_coeff(predict, target)
+                dice = 1 - loss
+                #dice = dice_coeff(predict, target)
+                #dice = dice_score(predict, target)
                 val_loss += loss.item() * len(sample_batched)
                 val_dice += dice.item() * len(sample_batched)
                 n_total += len(sample_batched)
@@ -180,20 +245,24 @@ class Instructor:
     def run(self):
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
-        #criterion = BCELoss2d()
-        criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
-        val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+        #optimizer = torch.optim.SGD(_params, lr=self.opt.lr,weight_decay=1e-4,momentum=0.9)
+        #criterion = BCELoss2d()#MULTICLASS_MODE
+        criterion = DiceLoss(to_onehot_y=True)
+        
+        # dist_mat = np.array([[0.0, 1.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0]], dtype=np.float32)
+        # criterion = GeneralizedWassersteinDiceLoss(dist_matrix=dist_mat)
+
+        #criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
+        #criterion = torch.nn.CrossEntropyLoss(ignore_index=1)
+        dl, val_dl = set_loaders(opt)
         #gen_ab = i_t_i_translation()
         self._reset_records()
-        for epoch in range(self.opt.num_epoch):
-            train_loss = self._train(dl, criterion, optimizer)
+        for epoch in range(self.opt.epochs):
+            #adjust_learning_rate(opt, optimizer, epoch)
+            train_loss = self._train(dl, criterion, optimizer,opt)
             val_loss, val_dice = self._evaluation(val_dl, criterion)
-            print(train_loss)
             self._update_records(epoch, train_loss, val_loss, val_dice)
-            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.num_epoch, train_loss, val_loss, val_dice))
+            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.epochs, train_loss, val_loss, val_dice))
         self._draw_records()
     
     def inference(self):
@@ -201,7 +270,7 @@ class Instructor:
         n_batch = len(test_dataloader)
         with torch.no_grad():
             for i_batch, sample_batched in enumerate(test_dataloader):
-                index, inputs = sample_batched['image'], sample_batched['label'].to(self.opt.device)
+                index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
                 predict = self.model(inputs)
                 self.testset.save_img(index.item(), predict, self.opt.use_crf)
                 ratio = int((i_batch+1)*50/n_batch)
@@ -226,13 +295,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     ''' For dataset '''
     parser.add_argument('--impath', default='shoe_dataset', type=str)
+    parser.add_argument('--dataset', type=str, default='cat',
+                        choices=['crossmoda','cat'], help='dataset')
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=1, type=int)
-    parser.add_argument('--num_epoch', default=100, type=int)
+    parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
-    parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--lr_decay_rate', type=float, default=0.1,
+                        help='decay rate for learning rate')
     parser.add_argument('--l2reg', default=1e-5, type=float)
     parser.add_argument('--use_bilinear', default=False, type=float)
     ''' For inference '''
@@ -250,6 +323,13 @@ if __name__ == '__main__':
     opt.optimizer = optimizers[opt.optimizer]
     opt.device = torch.device(opt.device) if opt.device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     opt.multi_gpu = opt.multi_gpu if opt.multi_gpu else 'on' if torch.cuda.device_count() > 1 else 'off'
+    if opt.dataset == 'cat':
+        label_str = "mask"
+        opt.lr = 0.0001
+        
+    else:
+        label_str = "label"
+        opt.batch_size = 32
     
     opt.impaths = {
         'train': os.path.join('.', opt.impath, 'train'),

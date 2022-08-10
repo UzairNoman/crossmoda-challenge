@@ -22,10 +22,10 @@ class CycleGANDataset(Dataset):
         super().__init__(**kwargs)
 
         if is_train:
-            subdir_a = 'syn_trainA'
+            subdir_a = 'synt_trainA'
             subdir_b = 'trainB'
         else:
-            subdir_a = 'syn_testA'
+            subdir_a = 'synt_testA'
             subdir_b = 'testB'
         label_dir = 'label_npy'
 
@@ -88,7 +88,6 @@ class CycleGANDataset(Dataset):
         to_tensor = transforms.ToTensor()
         label = to_tensor(label)
         #label = load_images([label_a], self._transform,label=True)
-        #print(f"++> {label.shape}")
         #path_b = self._sample_image(self._imgs_b, index)
         
         return {'image': load_images([path_a], self._transform), 'label': label}#, 'file_name': path_a[path_a.rfind('cross'):]}

@@ -77,13 +77,13 @@ class Instructor:
             
             file = features.detach().cpu().numpy()
             file_save = file.squeeze()
-            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/syn_testA/{fname[0]}", np.array(file_save), cmap='gray')  
+            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/synt_trainA/{fname[0]}", np.array(file_save), cmap='gray')  
 
         return 0
     
     
     def run(self):
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         #val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         gen_ab = i_t_i_translation()

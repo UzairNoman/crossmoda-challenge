@@ -33,8 +33,7 @@ def load_images(paths, transform = None, label = False):
         # print(f'=>>{np.array(result).shape}')
 
     if transform is not None:
-        result = apply_if_not_none(transform, result) 
-    print(f"$$$> {result.shape}")
+        result = apply_if_not_none(transform, result)
     return result
 
 def draw_image(image):

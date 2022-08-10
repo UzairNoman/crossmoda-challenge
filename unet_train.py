@@ -177,8 +177,8 @@ class Instructor:
             n_total += len(sample_batched)
             
             ratio = int((i_batch+1)*50/n_batch)
-            sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
-            sys.stdout.flush()
+            print("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
+            # sys.stdout.flush()
         print()
         return train_loss / n_total
     
@@ -251,7 +251,7 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--lr', default=0.1, type=float)

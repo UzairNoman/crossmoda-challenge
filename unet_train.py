@@ -19,8 +19,10 @@ import math
 from torchmetrics.functional import dice_score
 # from torchgeometry.losses import DiceLoss
 # from torchmetrics import Dice
-from monai.losses.dice import DiceLoss, GeneralizedWassersteinDiceLoss, one_hot
-
+from monai.losses.dice import DiceLoss, GeneralizedWassersteinDiceLoss, one_hot, DiceFocalLoss 
+from monai.losses import *
+import tensorboard_logger as tb_logger
+from torch.utils.tensorboard import SummaryWriter
 def set_loaders(opt):
     if opt.dataset == 'cat':
         # init train, val, test sets
@@ -53,12 +55,22 @@ def set_loaders(opt):
 
 
 def adjust_learning_rate(args,optimizer, epoch):
-    lr = args.lr
-    eta_min = lr * (args.lr_decay_rate ** 3)
-    lr = eta_min + (lr - eta_min) * (
-            1 + math.cos(math.pi * epoch / args.epochs)) / 2
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    return
+    # lr = args.lr
+    # if args.cosine:
+    #     eta_min = lr * (args.lr_decay_rate ** 3)
+    #     lr = eta_min + (lr - eta_min) * (
+    #             1 + math.cos(math.pi * epoch / args.epochs)) / 2
+    # else:
+    #     # steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
+    #     # if steps > 0:
+    #     #     lr = lr * (args.lr_decay_rate ** steps)
+    #     """initial LR decayed by 10 every 30 epochs"""
+    #     lr = lr * (0.1 ** (epoch // 30))
+        
+
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = lr
 
 def i_t_i_translation():
     
@@ -218,7 +230,7 @@ class Instructor:
             
             train_loss += loss.item() * len(sample_batched)
             n_total += len(sample_batched)
-            
+   
             ratio = int((i_batch+1)*50/n_batch)
             sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
             sys.stdout.flush()
@@ -240,15 +252,19 @@ class Instructor:
                 val_loss += loss.item() * len(sample_batched)
                 val_dice += dice.item() * len(sample_batched)
                 n_total += len(sample_batched)
+
         return val_loss / n_total, val_dice / n_total
     
     def run(self):
+        folder_counter = sum([len(folder) for r, d, folder in os.walk(opt.tb_path)])
+        print(f'Version: {folder_counter}')
+        writer = SummaryWriter(f'{opt.tb_path}/{opt.dataset}-{folder_counter}_{opt.epochs}')
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
         #optimizer = torch.optim.SGD(_params, lr=self.opt.lr,weight_decay=1e-4,momentum=0.9)
         #criterion = BCELoss2d()#MULTICLASS_MODE
         criterion = DiceLoss(to_onehot_y=True)
-        
+        #criterion = TverskyLoss(include_background=False, to_onehot_y=True)
         # dist_mat = np.array([[0.0, 1.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0]], dtype=np.float32)
         # criterion = GeneralizedWassersteinDiceLoss(dist_matrix=dist_mat)
 
@@ -258,11 +274,16 @@ class Instructor:
         #gen_ab = i_t_i_translation()
         self._reset_records()
         for epoch in range(self.opt.epochs):
-            #adjust_learning_rate(opt, optimizer, epoch)
+            adjust_learning_rate(opt, optimizer, epoch)
             train_loss = self._train(dl, criterion, optimizer,opt)
             val_loss, val_dice = self._evaluation(val_dl, criterion)
             self._update_records(epoch, train_loss, val_loss, val_dice)
             print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.epochs, train_loss, val_loss, val_dice))
+
+            writer.add_scalar('Train Loss', train_loss, epoch)
+            writer.add_scalar("Val Loss", val_loss,epoch)
+            writer.add_scalar("Val Dice", val_dice,epoch)
+            writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
         self._draw_records()
     
     def inference(self):
@@ -303,9 +324,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
-    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--lr', default=0.01, type=float)
     parser.add_argument('--lr_decay_rate', type=float, default=0.1,
                         help='decay rate for learning rate')
+    parser.add_argument('--lr_decay_epochs', type=str, default='50,100,150',
+                        help='where to decay lr, can be a list')
     parser.add_argument('--l2reg', default=1e-5, type=float)
     parser.add_argument('--use_bilinear', default=False, type=float)
     ''' For inference '''
@@ -314,6 +337,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint', default=None, type=str)
     ''' For environment '''
     parser.add_argument('--backend', default=False, type=bool)
+    parser.add_argument('--cosine', action='store_true',
+                        help='using cosine annealing')
     parser.add_argument('--prefetch', default=False, type=bool)
     parser.add_argument('--device', default=None, type=str, help='cpu, cuda')
     parser.add_argument('--multi_gpu', default=None, type=str, help='on, off')
@@ -338,7 +363,9 @@ if __name__ == '__main__':
         'btrain': os.path.join('.', opt.impath, 'bg', 'train'),
         'bval': os.path.join('.', opt.impath, 'bg', 'val')
     }
-    
+    opt.tb_path = 'logs/{}_models_seg'.format(opt.dataset)
+
+
     for folder in ['figs', 'logs', 'state_dict', 'predicts']:
         if not os.path.exists(folder):
             os.mkdir(folder)

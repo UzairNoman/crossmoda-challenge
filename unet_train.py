@@ -16,6 +16,7 @@ from uvcgan.config import Args
 import segmentation_models_pytorch as smp
 import numpy as np
 import math
+from utils.helper import save_img
 from torchmetrics.functional import dice_score
 # from torchgeometry.losses import DiceLoss
 # from torchmetrics import Dice
@@ -45,8 +46,8 @@ def set_loaders(opt):
         val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
         test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
     else:
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset(opt.data_root,is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset(opt.data_root,is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
 
@@ -55,22 +56,21 @@ def set_loaders(opt):
 
 
 def adjust_learning_rate(args,optimizer, epoch):
-    return
-    # lr = args.lr
-    # if args.cosine:
-    #     eta_min = lr * (args.lr_decay_rate ** 3)
-    #     lr = eta_min + (lr - eta_min) * (
-    #             1 + math.cos(math.pi * epoch / args.epochs)) / 2
-    # else:
-    #     # steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
-    #     # if steps > 0:
-    #     #     lr = lr * (args.lr_decay_rate ** steps)
-    #     """initial LR decayed by 10 every 30 epochs"""
-    #     lr = lr * (0.1 ** (epoch // 30))
+    lr = args.lr
+    if args.cosine:
+        eta_min = lr * (args.lr_decay_rate ** 3)
+        lr = eta_min + (lr - eta_min) * (
+                1 + math.cos(math.pi * epoch / args.epochs)) / 2
+    else:
+        # steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
+        # if steps > 0:
+        #     lr = lr * (args.lr_decay_rate ** steps)
+        """initial LR decayed by 10 every 30 epochs"""
+        lr = lr * (0.1 ** (epoch // 30))
         
 
-    # for param_group in optimizer.param_groups:
-    #     param_group['lr'] = lr
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 def i_t_i_translation():
     
@@ -82,9 +82,6 @@ def i_t_i_translation():
         )
         # for m in model.models:
         #   m = torch.nn.DataParallel(m)
-
-        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
-        # state_dict = ckpt
 
         epoch = -1
 
@@ -219,8 +216,7 @@ class Instructor:
             # target = one_hot(target_idx[:, None, ...], num_classes=3)
             # print(target.shape)
             # target = target.requires_grad_().to(self.opt.device)
-            
-        
+                
 
             optimizer.zero_grad()
             
@@ -242,7 +238,7 @@ class Instructor:
         val_loss, val_dice, n_total = 0, 0, 0
         with torch.no_grad():
             for sample_batched in val_dataloader:
-                inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device) # .long()
+                inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device)
                 predict = self.model(inputs)
                 #target = target.squeeze()
                 loss = criterion(predict, target)
@@ -287,13 +283,17 @@ class Instructor:
         self._draw_records()
     
     def inference(self):
-        test_dataloader = DataLoader(dataset=self.testset, batch_size=1, shuffle=False)
+        test_ds = CycleGANDataset(opt.data_root,is_test=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        #dl = DataLoader(test_ds, batch_size=opt.batch_size,shuffle=False)
+        test_dataloader = DataLoader(dataset=test_ds, batch_size=1, shuffle=False)
         n_batch = len(test_dataloader)
         with torch.no_grad():
             for i_batch, sample_batched in enumerate(test_dataloader):
-                index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
+                inputs, index, fname = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device), sample_batched['file_name']
+                # index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
                 predict = self.model(inputs)
-                self.testset.save_img(index.item(), predict, self.opt.use_crf)
+                # [1, 3, 174, 174]
+                #save_img(index.item(), predict, fname)
                 ratio = int((i_batch+1)*50/n_batch)
                 sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
                 sys.stdout.flush()
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     ''' For dataset '''
     parser.add_argument('--impath', default='shoe_dataset', type=str)
-    parser.add_argument('--dataset', type=str, default='cat',
+    parser.add_argument('--dataset', type=str, default='crossmoda',
                         choices=['crossmoda','cat'], help='dataset')
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
@@ -365,6 +365,9 @@ if __name__ == '__main__':
     }
     opt.tb_path = 'logs/{}_models_seg'.format(opt.dataset)
 
+    repo_root = os.path.abspath(os.getcwd())
+    opt.data_root = os.path.join(repo_root, "../data/crossmoda2022_training/")
+
 
     for folder in ['figs', 'logs', 'state_dict', 'predicts']:
         if not os.path.exists(folder):
@@ -374,7 +377,7 @@ if __name__ == '__main__':
         mpl.use('Agg')
     
     ins = Instructor(opt)
-    # if opt.inference:
-    #     ins.inference()
-    # else:
-    ins.run()
+    if opt.inference:
+        ins.inference()
+    else:
+        ins.run()

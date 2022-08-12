@@ -24,6 +24,7 @@ from monai.losses.dice import DiceLoss, GeneralizedWassersteinDiceLoss, one_hot,
 from monai.losses import *
 import tensorboard_logger as tb_logger
 from torch.utils.tensorboard import SummaryWriter
+from losses.focal_tversky import FocalTversky
 def set_loaders(opt):
     if opt.dataset == 'cat':
         # init train, val, test sets
@@ -132,7 +133,7 @@ class Instructor:
         self.model = UNet(n_channels=1, n_classes=3, bilinear=self.opt.use_bilinear)
         pytorch_total_params = sum(p.numel() for p in self.model.parameters())
         print(f'Model param: {pytorch_total_params}')
-        if opt.checkpoint:
+        if opt.inference:
             self.model.load_state_dict(torch.load('./state_dict/{:s}'.format(opt.checkpoint), map_location=self.opt.device))
             print('checkpoint {:s} has been loaded'.format(opt.checkpoint))
         if opt.multi_gpu == 'on':
@@ -224,7 +225,7 @@ class Instructor:
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item() * len(sample_batched)
+            train_loss += loss.item() #* len(sample_batched)
             n_total += len(sample_batched)
    
             ratio = int((i_batch+1)*50/n_batch)
@@ -260,6 +261,8 @@ class Instructor:
         #optimizer = torch.optim.SGD(_params, lr=self.opt.lr,weight_decay=1e-4,momentum=0.9)
         #criterion = BCELoss2d()#MULTICLASS_MODE
         criterion = DiceLoss(to_onehot_y=True)
+        #criterion = FocalTversky()
+
         #criterion = TverskyLoss(include_background=False, to_onehot_y=True)
         # dist_mat = np.array([[0.0, 1.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0]], dtype=np.float32)
         # criterion = GeneralizedWassersteinDiceLoss(dist_matrix=dist_mat)
@@ -285,19 +288,20 @@ class Instructor:
     def inference(self):
         test_ds = CycleGANDataset(opt.data_root,is_test=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         #dl = DataLoader(test_ds, batch_size=opt.batch_size,shuffle=False)
-        test_dataloader = DataLoader(dataset=test_ds, batch_size=1, shuffle=False)
-        n_batch = len(test_dataloader)
-        with torch.no_grad():
-            for i_batch, sample_batched in enumerate(test_dataloader):
-                inputs, index, fname = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device), sample_batched['file_name']
-                # index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
-                predict = self.model(inputs)
-                # [1, 3, 174, 174]
-                #save_img(index.item(), predict, fname)
-                ratio = int((i_batch+1)*50/n_batch)
-                sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
-                sys.stdout.flush()
-        print()
+        test_dataloader = DataLoader(dataset=test_ds, batch_size=120, shuffle=False)
+        print(next(iter(test_dataloader))[0])
+        # n_batch = len(test_dataloader)
+        # with torch.no_grad():
+        #     for i_batch, sample_batched in enumerate(test_dataloader):
+        #         inputs, index, fname = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device), sample_batched['file_name']
+        #         # index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
+        #         predict = self.model(inputs)
+        #         # [1, 3, 174, 174]
+        #         #save_img(index.item(), predict, fname)
+        #         ratio = int((i_batch+1)*50/n_batch)
+        #         sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
+        #         sys.stdout.flush()
+        # print()
     
 
 if __name__ == '__main__':

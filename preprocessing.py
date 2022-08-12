@@ -12,8 +12,9 @@ import matplotlib.pyplot as plt
 from torchvision.transforms.functional import center_crop
 
 def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtered, resize, folder,type="ceT1",start=0,end=0):
+    all_data = ([],[])
     for fname in tqdm(folder):
-
+        
         if not fname.endswith(f"{type}.nii.gz"):
             continue
 
@@ -50,10 +51,20 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
             #image = PIL.Image.fromarray((np.array(image) * 255).astype(np.uint8))
             fp = os.path.join(output_folder, f"{f_basename}_{i}")
             # for image
-            # plt.imsave(f"{fp}.jpeg", np.array(image), cmap='gray')
+            if(type == 'Label'):
+                fp = f"{fp}.npy"
+                np.save(fp, image)
+            else:
+                fp = f"{fp}.jpeg"
+                plt.imsave(fp, np.array(image), cmap='gray')
+            
+            all_data[0].append(fp)
+            all_data[1].append(np_data.shape[axis])
+
+    return all_data
+
             #image.save(f"{fp}.jpeg")
             # for label
-            np.save(f"{fp}.npy", image)
 
 input_dir = r"training_source"
 output_dir = r"label_npy"

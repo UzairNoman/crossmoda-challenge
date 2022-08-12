@@ -19,6 +19,7 @@ class CycleGANDataset(Dataset):
         seed          = None,
         transform     = None,
         is_test       = False,
+        force_recreate = False,
         **kwargs
     ):
         # pylint: disable=too-many-arguments
@@ -32,28 +33,33 @@ class CycleGANDataset(Dataset):
             subdir_b = 'testB'
         label_dir = 'label_npy'
 
+        self.reseed(seed)
+
+        self._imgs_a      = []
+        if is_test:
+            full_output_dir = self.preprocessing(path,force_recreate)
+            subdir_a = full_output_dir
+
         self._align_train = align_train
         self._is_train    = is_train
         self._path_a      = os.path.join(path, subdir_a)
         self.label_path = os.path.join(path, label_dir)
         #self._path_b      = os.path.join(path, subdir_b)
-        self._imgs_a      = []
         #self._imgs_b      = []
         self._transform   = transform
         self._len         = 0
         self.is_test      = is_test
 
-        self.reseed(seed)
-        self._collect_files()
-
         if is_test:
-            full_output_dir = self.preprocessing(path)
-            subdir_a = full_output_dir
+            pass
+        else:
+            self._collect_files()
+
 
     def reseed(self, seed):
         self._prg = np.random.default_rng(seed)
 
-    def preprocessing(self,path):
+    def preprocessing(self,path,force_recreate):
         input_dir = r"crossmoda2022_subset_validation"
         output_dir = r"val_subset"
         full_input_dir =  os.path.join(path, input_dir)
@@ -61,10 +67,10 @@ class CycleGANDataset(Dataset):
         axis = 2
         do_filter = False
         resize = 256
-        if(dir_empty(full_output_dir)):
+        if(dir_empty(full_output_dir) or force_recreate == True):
             os.makedirs(full_output_dir, exist_ok=True)
             complete_input_folder = sorted(os.listdir(full_input_dir))
-            nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")
+            self._imgs_a = nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")      
         else:
             print("Output dir not empty")
         return full_output_dir
@@ -90,6 +96,7 @@ class CycleGANDataset(Dataset):
         return result
 
     def _collect_files(self):
+        print(self._path_a)
         self._imgs_a = CycleGANDataset.find_in_dir(self._path_a)
 
         #self._imgs_b = CycleGANDataset.find_images_in_dir(self._path_b)
@@ -105,18 +112,23 @@ class CycleGANDataset(Dataset):
         return sample_image(images, index, self._prg, randomize)
 
     def __getitem__(self, index):
-        path_a = self._sample_image(self._imgs_a, index)
         if self.is_test:
+            path_a = self._imgs_a[0][index]
+            dim = self._imgs_a[1][index]
             label = index
         else:
+            path_a = self._sample_image(self._imgs_a, index)
             #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
-            label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace('ceT1','Label').replace('jpeg','npy')
+            type = "hrT2" if "hrT2" in path_a else "ceT1"     
+            label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace(type,'Label').replace('jpeg','npy')
             label = np.load(label_a)
             to_tensor = transforms.ToTensor()
             label = to_tensor(label)
             #label = load_images([label_a], self._transform,label=True)
             #path_b = self._sample_image(self._imgs_b, index)
         element = {'image': load_images([path_a], self._transform), 'label': label}
-        if self.is_test: element['file_name'] = path_a[path_a.rfind('cross'):]
+        if self.is_test: 
+            element['file_name'] = path_a[path_a.rfind('cross'):]
+            element['dim'] = dim
         return element
         #return load_images([path_a, path_b], self._transform)

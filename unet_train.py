@@ -251,7 +251,7 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=100, type=int)
+    parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--lr', default=0.1, type=float)

@@ -274,7 +274,7 @@ if __name__ == '__main__':
     opt.optimizer = optimizers[opt.optimizer]
     opt.device = torch.device(opt.device) if opt.device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     opt.multi_gpu = opt.multi_gpu if opt.multi_gpu else 'on' if torch.cuda.device_count() > 1 else 'off'
-    print(opt.multi_gpu)
+    print(torch.cuda.is_available())
     
     opt.impaths = {
         'train': os.path.join('.', opt.impath, 'train'),

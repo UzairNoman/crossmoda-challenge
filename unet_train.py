@@ -251,7 +251,7 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--lr', default=0.1, type=float)
@@ -274,6 +274,7 @@ if __name__ == '__main__':
     opt.optimizer = optimizers[opt.optimizer]
     opt.device = torch.device(opt.device) if opt.device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     opt.multi_gpu = opt.multi_gpu if opt.multi_gpu else 'on' if torch.cuda.device_count() > 1 else 'off'
+    print(opt.multi_gpu)
     
     opt.impaths = {
         'train': os.path.join('.', opt.impath, 'train'),

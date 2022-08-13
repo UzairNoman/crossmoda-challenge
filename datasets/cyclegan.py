@@ -5,8 +5,10 @@ from torchvision.datasets.folder import default_loader
 from torchvision import transforms
 from torch.utils.data import Dataset
 from torchvision.datasets.folder import IMG_EXTENSIONS
-from utils.helper import read_nii_file, sample_image, load_images
+from utils.helper import read_nii_file, sample_image, load_images, dir_empty
+from preprocessing import nifti_to_2d_slices
 import monai
+
 class CycleGANDataset(Dataset):
     # pylint: disable=too-many-instance-attributes
 
@@ -16,18 +18,27 @@ class CycleGANDataset(Dataset):
         is_train      = False,
         seed          = None,
         transform     = None,
+        is_test       = False,
         **kwargs
     ):
         # pylint: disable=too-many-arguments
         super().__init__(**kwargs)
 
         if is_train:
-            subdir_a = 'syn_trainA'
+            subdir_a = 'synt_trainA'
             subdir_b = 'trainB'
         else:
-            subdir_a = 'syn_testA'
+            subdir_a = 'synt_testA'
             subdir_b = 'testB'
         label_dir = 'label_npy'
+
+        self.reseed(seed)
+
+        if is_test:
+            subdir_a = 'val_subset'
+        # if is_test:
+        #     full_output_dir = self.preprocessing(path,force_recreate)
+        #     subdir_a = full_output_dir
 
         self._align_train = align_train
         self._is_train    = is_train
@@ -38,12 +49,29 @@ class CycleGANDataset(Dataset):
         #self._imgs_b      = []
         self._transform   = transform
         self._len         = 0
+        self.is_test      = is_test
 
-        self.reseed(seed)
         self._collect_files()
+
 
     def reseed(self, seed):
         self._prg = np.random.default_rng(seed)
+
+    def preprocessing(self,path,force_recreate):
+        input_dir = r"crossmoda2022_subset_validation"
+        output_dir = r"val_subset"
+        full_input_dir =  os.path.join(path, input_dir)
+        full_output_dir = os.path.join(path, output_dir)
+        axis = 2
+        do_filter = False
+        resize = 256
+        if(dir_empty(full_output_dir) or force_recreate == True):
+            os.makedirs(full_output_dir, exist_ok=True)
+            complete_input_folder = sorted(os.listdir(full_input_dir))
+            self._imgs_a = nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")
+        else:
+            print("Output dir not empty")
+        return full_output_dir
 
     @staticmethod
     def find_in_dir(path,labels = False):
@@ -81,15 +109,20 @@ class CycleGANDataset(Dataset):
         return sample_image(images, index, self._prg, randomize)
 
     def __getitem__(self, index):
-        path_a = self._sample_image(self._imgs_a, index)
-        #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
-        label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace('ceT1','Label').replace('jpeg','npy')
-        label = np.load(label_a)
-        to_tensor = transforms.ToTensor()
-        label = to_tensor(label)
-        #label = load_images([label_a], self._transform,label=True)
-        #print(f"++> {label.shape}")
-        #path_b = self._sample_image(self._imgs_b, index)
-        
-        return {'image': load_images([path_a], self._transform), 'label': label}#, 'file_name': path_a[path_a.rfind('cross'):]}
+        if self.is_test:
+            path_a = self._sample_image(self._imgs_a, index)
+            label = index
+        else:
+            path_a = self._sample_image(self._imgs_a, index)
+            #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
+            type = "hrT2" if "hrT2" in path_a else "ceT1"     
+            label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace(type,'Label').replace('jpeg','npy')
+            label = np.load(label_a)
+            to_tensor = transforms.ToTensor()
+            label = to_tensor(label)
+            #label = load_images([label_a], self._transform,label=True)
+            #path_b = self._sample_image(self._imgs_b, index)
+        element = {'image': load_images([path_a], self._transform), 'label': label}
+        if self.is_test: element['file_name'] = path_a[path_a.rfind('cross'):]
+        return element
         #return load_images([path_a, path_b], self._transform)

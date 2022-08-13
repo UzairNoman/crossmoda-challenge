@@ -56,6 +56,7 @@ def read_nii_file(path):
     nifti = nib.load(path)
     data_array = nifti.get_data()
     affine_matrix = nifti.affine
+    # print(f'->>>{affine_matrix}')
     return torch.from_numpy(data_array)
 
 def dir_empty(dir_path):

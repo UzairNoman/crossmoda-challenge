@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 from torchvision.transforms.functional import center_crop
 
 def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtered, resize, folder,type="ceT1",start=0,end=0):
-    all_data = ([],[])
+    all_data = [[],[],[]]
+    file_count = 0
     for fname in tqdm(folder):
         
         if not fname.endswith(f"{type}.nii.gz"):
@@ -28,10 +29,9 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
         f_basename = fname.split(".")[0]
         #np_data.shape[axis]
         for i in range(start,np_data.shape[axis] - end):
-            slc = [slice(None)] * len(np_data.shape)
             
-            slc[axis] = i
-            image = np_data[slc]
+
+            image = np_data[:,:,i]
             # image.shape (512, 512)
 
             if resize:
@@ -58,8 +58,9 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
                 fp = f"{fp}.jpeg"
                 plt.imsave(fp, np.array(image), cmap='gray')
             
-            all_data[0].append(fp)
-            all_data[1].append(np_data.shape[axis])
+        all_data[0].append(fname)
+        all_data[1].append(np_data.shape[axis])
+        all_data[2].append(nifti.affine)
 
     return all_data
 

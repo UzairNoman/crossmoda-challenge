@@ -288,7 +288,7 @@ class Instructor:
     def inference(self):
         test_ds = CycleGANDataset(opt.data_root,is_test=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         #dl = DataLoader(test_ds, batch_size=opt.batch_size,shuffle=False)
-        test_dataloader = DataLoader(dataset=test_ds, batch_size=120, shuffle=False)
+        test_dataloader = DataLoader(dataset=test_ds, batch_size=90, shuffle=False)
         print(next(iter(test_dataloader))[0])
         # n_batch = len(test_dataloader)
         # with torch.no_grad():

@@ -19,7 +19,6 @@ class CycleGANDataset(Dataset):
         seed          = None,
         transform     = None,
         is_test       = False,
-        force_recreate = False,
         **kwargs
     ):
         # pylint: disable=too-many-arguments
@@ -35,25 +34,24 @@ class CycleGANDataset(Dataset):
 
         self.reseed(seed)
 
-        self._imgs_a      = []
         if is_test:
-            full_output_dir = self.preprocessing(path,force_recreate)
-            subdir_a = full_output_dir
+            subdir_a = 'val_subset'
+        # if is_test:
+        #     full_output_dir = self.preprocessing(path,force_recreate)
+        #     subdir_a = full_output_dir
 
         self._align_train = align_train
         self._is_train    = is_train
         self._path_a      = os.path.join(path, subdir_a)
         self.label_path = os.path.join(path, label_dir)
         #self._path_b      = os.path.join(path, subdir_b)
+        self._imgs_a      = []
         #self._imgs_b      = []
         self._transform   = transform
         self._len         = 0
         self.is_test      = is_test
 
-        if is_test:
-            pass
-        else:
-            self._collect_files()
+        self._collect_files()
 
 
     def reseed(self, seed):
@@ -70,7 +68,7 @@ class CycleGANDataset(Dataset):
         if(dir_empty(full_output_dir) or force_recreate == True):
             os.makedirs(full_output_dir, exist_ok=True)
             complete_input_folder = sorted(os.listdir(full_input_dir))
-            self._imgs_a = nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")      
+            self._imgs_a = nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")
         else:
             print("Output dir not empty")
         return full_output_dir
@@ -96,7 +94,6 @@ class CycleGANDataset(Dataset):
         return result
 
     def _collect_files(self):
-        print(self._path_a)
         self._imgs_a = CycleGANDataset.find_in_dir(self._path_a)
 
         #self._imgs_b = CycleGANDataset.find_images_in_dir(self._path_b)
@@ -113,8 +110,7 @@ class CycleGANDataset(Dataset):
 
     def __getitem__(self, index):
         if self.is_test:
-            path_a = self._imgs_a[0][index]
-            dim = self._imgs_a[1][index]
+            path_a = self._sample_image(self._imgs_a, index)
             label = index
         else:
             path_a = self._sample_image(self._imgs_a, index)
@@ -127,8 +123,6 @@ class CycleGANDataset(Dataset):
             #label = load_images([label_a], self._transform,label=True)
             #path_b = self._sample_image(self._imgs_b, index)
         element = {'image': load_images([path_a], self._transform), 'label': label}
-        if self.is_test: 
-            element['file_name'] = path_a[path_a.rfind('cross'):]
-            element['dim'] = dim
+        if self.is_test: element['file_name'] = path_a[path_a.rfind('cross'):]
         return element
         #return load_images([path_a, path_b], self._transform)

@@ -18,13 +18,17 @@ import numpy as np
 import math
 from utils.helper import save_img
 from torchmetrics.functional import dice_score
-# from torchgeometry.losses import DiceLoss
-# from torchmetrics import Dice
-from monai.losses.dice import DiceLoss, GeneralizedWassersteinDiceLoss, one_hot, DiceFocalLoss 
+from monai.losses.dice import DiceLoss, one_hot, DiceFocalLoss 
+from monai.losses import TverskyLoss
+from monai.metrics import DiceMetric
 from monai.losses import *
 import tensorboard_logger as tb_logger
 from torch.utils.tensorboard import SummaryWriter
 from losses.focal_tversky import FocalTversky
+from torch.nn import functional as F 
+from sklearn.model_selection import train_test_split
+from torch.optim.lr_scheduler import *
+import copy
 def set_loaders(opt):
     if opt.dataset == 'cat':
         # init train, val, test sets
@@ -47,10 +51,15 @@ def set_loaders(opt):
         val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
         test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
     else:
-        ds = CycleGANDataset(opt.data_root,is_train=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset(opt.data_root,is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
-        val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
+        ds = CycleGANDataset(opt.data_root,is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        train, val = train_test_split(ds, test_size=0.1, random_state=42)
+        print(f"Train:{len(train)}")
+        print(f"Val:{len(val)}")
+        # val_ds = CycleGANDataset(opt.data_root,is_train=False,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        dl = DataLoader(train, batch_size=opt.batch_size,shuffle=True)
+        val_dl = DataLoader(val, batch_size=opt.batch_size,shuffle=True)
+        print(f"Train dl:{len(dl)}")
+        print(f"Val dl:{len(val_dl)}")
 
     return (dl,val_dl)
 
@@ -63,11 +72,10 @@ def adjust_learning_rate(args,optimizer, epoch):
         lr = eta_min + (lr - eta_min) * (
                 1 + math.cos(math.pi * epoch / args.epochs)) / 2
     else:
-        # steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
-        # if steps > 0:
-        #     lr = lr * (args.lr_decay_rate ** steps)
-        """initial LR decayed by 10 every 30 epochs"""
-        lr = lr * (0.1 ** (epoch // 30))
+        args.lr_decay_epochs = "5,10,20"
+        steps = np.sum(epoch if epoch in np.asarray(args.lr_decay_epochs) else 0)
+        if steps > 0:
+            lr = lr * (args.lr_decay_rate ** steps)
         
 
     for param_group in optimizer.param_groups:
@@ -116,26 +124,14 @@ def dice_coeff(predict, target):
     m2 = target.view(batch_size, -1)
     intersection = (m1 * m2).sum(-1)
     return ((2.0 * intersection + smooth) / (m1.sum(-1) + m2.sum(-1) + smooth)).mean()
-# def dice_coeff(y_pred, y_true, epsilon=1e-6):
-#     y_true_flatten = np.asarray(y_true.detach().cpu()).astype(np.bool)
-#     y_pred_flatten = np.asarray(y_pred.detach().cpu()).astype(np.bool)
-
-#     if not np.sum(y_true_flatten) + np.sum(y_pred_flatten):
-#         return 1.0
-
-#     return (2. * np.sum(y_true_flatten * y_pred_flatten)) /\
-#            (np.sum(y_true_flatten) + np.sum(y_pred_flatten) + epsilon)
 
 class Instructor:
     ''' Model training and evaluation '''
     def __init__(self, opt):
-        self.opt = opt    
-        self.model = UNet(n_channels=1, n_classes=3, bilinear=self.opt.use_bilinear)
+        self.opt = opt
+        self.model = smp.Unet(encoder_name=opt.model_name, encoder_depth= 5, encoder_weights= None, decoder_use_batchnorm= True,in_channels = 1, classes= 3, activation= 'softmax')
         pytorch_total_params = sum(p.numel() for p in self.model.parameters())
         print(f'Model param: {pytorch_total_params}')
-        if opt.inference:
-            self.model.load_state_dict(torch.load('./state_dict/{:s}'.format(opt.checkpoint), map_location=self.opt.device))
-            print('checkpoint {:s} has been loaded'.format(opt.checkpoint))
         if opt.multi_gpu == 'on':
             self.model = torch.nn.DataParallel(self.model)   # 1,174,174 | 3,174,174
         self.model = self.model.to(opt.device)
@@ -167,11 +163,12 @@ class Instructor:
     
     def _update_records(self, epoch, train_loss, val_loss, val_dice):
         if val_dice > self.records['best_dice']:
-            path = './state_dict/{:s}_dice{:.4f}_temp{:s}.pt'.format(self.opt.model_name, val_dice, str(time.time())[-6:])
+            path = './challenge/weights/{:s}_dice{:.4f}_temp{:s}.pt'.format(self.opt.model_name, val_dice, str(time.time())[-6:])
             if self.opt.multi_gpu == 'on':
                 torch.save(self.model.module.state_dict(), path)
             else:
                 torch.save(self.model.state_dict(), path)
+            print(f'Saved model: {path}')
             self.records['best_epoch'] = epoch
             self.records['best_dice'] = val_dice
             self.records['checkpoints'].append(path)
@@ -184,35 +181,28 @@ class Instructor:
         print('best epoch: {:d}'.format(self.records['best_epoch']))
         print('best train loss: {:.4f}, best val loss: {:.4f}'.format(min(self.records['train_loss']), min(self.records['val_loss'])))
         print('best val dice {:.4f}'.format(self.records['best_dice']))
-        os.rename(self.records['checkpoints'][-1], './state_dict/{:s}_dice{:.4f}_save{:s}.pt'.format(self.opt.model_name, self.records['best_dice'], timestamp))
+        os.rename(self.records['checkpoints'][-1], './challenge/weights/{:s}_dice{:.4f}_save{:s}.pt'.format(self.opt.model_name, self.records['best_dice'], timestamp))
         for path in self.records['checkpoints'][0:-1]:
             os.remove(path)
-        # Draw figures
-        # plt.figure()
-        # trainloss, = plt.plot(self.records['train_loss'])
-        # valloss, = plt.plot(self.records['val_loss'])
-        # plt.legend([trainloss, valloss], ['train', 'val'], loc='upper right')
-        # plt.title('{:s} loss curve'.format(timestamp))
-        # plt.savefig('./figs/{:s}_loss.png'.format(timestamp), format='png', transparent=True, dpi=300)
-        # plt.figure()
-        # valdice, = plt.plot(self.records['val_dice'])
-        # plt.title('{:s} dice curve'.format(timestamp))
-        # plt.savefig('./figs/{:s}_dice.png'.format(timestamp), format='png', transparent=True, dpi=300)
-        # Save report
+
         report = '\t'.join(['val_dice', 'train_loss', 'val_loss', 'best_epoch', 'timestamp'])
         report += "\n{:.4f}\t{:.4f}\t{:.4f}\t{:d}\t{:s}\n{:s}".format(self.records['best_dice'], min(self.records['train_loss']), min(self.records['val_loss']), self.records['best_epoch'], timestamp, self.info)
         with open('./logs/{:s}_log.txt'.format(timestamp), 'w') as f:
             f.write(report)
         print('report saved:', './logs/{:s}_log.txt'.format(timestamp))
     
-    def _train(self, train_dataloader, criterion, optimizer,opt):
+    def _train(self, train_dataloader, criterion, optimizer,opt,arr):
         self.model.train()
+        arr = []
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         for i_batch, sample_batched in enumerate(train_dataloader):
             inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device) # .long()
             predict = self.model(inputs)
             #target = target.squeeze()
-
+            # torch.set_printoptions(profile="full")
+            # print(f"_> {predict}")
+            # print(f"_> {torch.sum(predict, dim=(1,2,3))}")
+            arr.append(torch.sum(predict, dim=(1,2)))
             # target_idx = target
             # target = one_hot(target_idx[:, None, ...], num_classes=3)
             # print(target.shape)
@@ -225,32 +215,50 @@ class Instructor:
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item() #* len(sample_batched)
+            train_loss += loss.item() * len(sample_batched)
             n_total += len(sample_batched)
    
-            ratio = int((i_batch+1)*50/n_batch)
-            sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
             sys.stdout.flush()
         print()
-        return train_loss / n_total
+        batch_result = torch.cat(arr)
+        return train_loss / n_total, batch_result
     
     def _evaluation(self, val_dataloader, criterion):
         self.model.eval()
-        val_loss, val_dice, n_total = 0, 0, 0
+        val_loss, val_dice, n_total, dice_metric,vs_dice,c_dice = 0, 0, 0, 0, 0, 0
         with torch.no_grad():
             for sample_batched in val_dataloader:
                 inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device)
                 predict = self.model(inputs)
                 #target = target.squeeze()
-                loss = criterion(predict, target)
-                dice = 1 - loss
-                #dice = dice_coeff(predict, target)
-                #dice = dice_score(predict, target)
-                val_loss += loss.item() * len(sample_batched)
-                val_dice += dice.item() * len(sample_batched)
-                n_total += len(sample_batched)
+                loss = criterion(predict, target)       
+                loss_for_metric = DiceLoss(include_background=False,to_onehot_y=True)
+                dice_metric = 1 - loss_for_metric(predict, target)
+                # etc = torchmetrics.functional.dice(torch.argmax(predict, dim=1).unsqueeze(dim=1), target,average = 'none',ignore_index=0,num_classes=2, zero_division=0 )
+                # print(etc)
 
-        return val_loss / n_total, val_dice / n_total
+                
+                target = target.squeeze()
+                target = F.one_hot(target, num_classes=3)
+                target = target.permute(0, 3, 1,2)
+                predict = torch.argmax(predict, dim=1)
+                predict = F.one_hot(predict, num_classes=3)
+                predict = predict.permute(0, 3, 1,2)
+
+
+                metric = DiceMetric(include_background=False,reduction='none')
+                dice_with_nan = metric(y_pred = predict,y = target).cpu().numpy()
+                dice = np.nan_to_num(dice_with_nan).mean(axis=0)
+                vs_dice +=  dice[0]
+                c_dice +=  dice[1]
+
+
+                val_loss += loss.item() * len(sample_batched)
+                val_dice += dice_metric.item() * len(sample_batched)
+                n_total += len(sample_batched)
+            
+
+        return val_loss / n_total, val_dice / n_total, vs_dice / n_total, c_dice / n_total
     
     def run(self):
         folder_counter = sum([len(folder) for r, d, folder in os.walk(opt.tb_path)])
@@ -260,10 +268,11 @@ class Instructor:
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
         #optimizer = torch.optim.SGD(_params, lr=self.opt.lr,weight_decay=1e-4,momentum=0.9)
         #criterion = BCELoss2d()#MULTICLASS_MODE
-        criterion = DiceLoss(to_onehot_y=True)
+        criterion = DiceLoss(include_background=False,to_onehot_y=True)
         #criterion = FocalTversky()
 
         #criterion = TverskyLoss(include_background=False, to_onehot_y=True)
+        # criterion = DiceFocalLoss(include_background=False, to_onehot_y=True)
         # dist_mat = np.array([[0.0, 1.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0]], dtype=np.float32)
         # criterion = GeneralizedWassersteinDiceLoss(dist_matrix=dist_mat)
 
@@ -272,39 +281,75 @@ class Instructor:
         dl, val_dl = set_loaders(opt)
         #gen_ab = i_t_i_translation()
         self._reset_records()
+        # scheduler1 = ExponentialLR(optimizer, gamma=0.9)
+        # scheduler1 = CosineAnnealingLR(optimizer,T_max=10, eta_min=0)
+        patience = 30
+        vs_dice, c_dice = 0,0
+        best_model, best_epoch, best_dev_acc = None, 0, -np.inf
+        batch_res = []
         for epoch in range(self.opt.epochs):
-            adjust_learning_rate(opt, optimizer, epoch)
-            train_loss = self._train(dl, criterion, optimizer,opt)
-            val_loss, val_dice = self._evaluation(val_dl, criterion)
-            self._update_records(epoch, train_loss, val_loss, val_dice)
-            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, val dice: {:.4f}'.format(epoch+1, self.opt.epochs, train_loss, val_loss, val_dice))
+            #adjust_learning_rate(opt, optimizer, epoch)
+            train_loss, batch_res = self._train(dl, criterion, optimizer,opt,batch_res)
+            # torch.set_printoptions(profile="full")
+            # print(f'=> Sample wis {batch_res}')
+            # print(f'=> Sample wise sum {torch.sum(batch_res, dim=(1,2,3))}')
+            # scheduler1.step()
+            val_loss, val_dice, new_vs_dice, new_c_dice = self._evaluation(val_dl, criterion)
+            if val_dice > best_dev_acc:
+                best_epoch = epoch
+                best_dev_acc = val_dice
+                best_model = copy.deepcopy(self.model) 
+                # We want to return the model from the best epoch, not from the last epoch
+
+            if epoch - best_epoch > patience:
+                # print(f"==> last pred {print(torch.argmax(predict, dim=1).sum(dim=0))}")
+                break
+
+
+            vs_dice = np.max([vs_dice, new_vs_dice])
+            c_dice = np.max([c_dice, new_c_dice])
+            # self._update_records(epoch, train_loss, val_loss, val_dice)
+            print('{:d}/{:d} > train loss: {:.4f}, val loss: {:.4f}, dice score: {:.4f}, vs dice: {:.4f}, cochlea dice: {:.4f}'.format(epoch+1, self.opt.epochs, train_loss, val_loss, val_dice, vs_dice, c_dice))
+
 
             writer.add_scalar('Train Loss', train_loss, epoch)
             writer.add_scalar("Val Loss", val_loss,epoch)
-            writer.add_scalar("Val Dice", val_dice,epoch)
+            writer.add_scalar("Dice metric", val_dice,epoch)
+            writer.add_scalar("VS Dice", vs_dice,epoch)
+            writer.add_scalar("Cochlea Dice", c_dice,epoch)
             writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
-        self._draw_records()
-    
-    def inference(self):
-        test_ds = CycleGANDataset(opt.data_root,is_test=True,transform = transforms.Compose([transforms.CenterCrop((174,174)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        #dl = DataLoader(test_ds, batch_size=opt.batch_size,shuffle=False)
-        test_dataloader = DataLoader(dataset=test_ds, batch_size=90, shuffle=False)
-        print(next(iter(test_dataloader))[0])
-        # n_batch = len(test_dataloader)
-        # with torch.no_grad():
-        #     for i_batch, sample_batched in enumerate(test_dataloader):
-        #         inputs, index, fname = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device), sample_batched['file_name']
-        #         # index, inputs = sample_batched['image'], sample_batched[label_str].to(self.opt.device)
-        #         predict = self.model(inputs)
-        #         # [1, 3, 174, 174]
-        #         #save_img(index.item(), predict, fname)
-        #         ratio = int((i_batch+1)*50/n_batch)
-        #         sys.stdout.write("\r["+">"*ratio+" "*(50-ratio)+"] {}/{} {:.2f}%".format(i_batch+1, n_batch, (i_batch+1)*100/n_batch))
-        #         sys.stdout.flush()
-        # print()
-    
+
+        path = './challenge/weights/{:s}_dice{:.4f}_best{:s}.pt'.format(self.opt.model_name, val_dice, str(time.time())[-6:])
+        if self.opt.multi_gpu == 'on':
+            torch.save(best_model.module.state_dict(), path)
+        else:
+            torch.save(best_model.state_dict(), path)
+        print(f'Saved model with Early Stopping: {path}')
+
+        # self._draw_records()
+
+    def dev_eval(self,opt):
+        opt.checkpoint = 'resnet34_no_0008_dice0.7728_best039548.pt'
+        opt.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        dl, val_dl = set_loaders(opt)
+        model = smp.Unet(encoder_name=opt.model_name, encoder_depth= 5, encoder_weights= None, decoder_use_batchnorm= True,in_channels = 1, classes= 3, activation= 'softmax')
+        model.load_state_dict(torch.load('challenge/weights/{:s}'.format(opt.checkpoint), map_location=opt.device))
+        model = model.to(opt.device)
+        model.eval()
+        print('checkpoint {:s} has been loaded'.format(opt.checkpoint))
+        batch_mat = []
+        for idx, data in enumerate(dl):
+            inputs = data['image'].float().cuda()
+            # inputs = inputs.unsqueeze(0)
+            predict = model(inputs)
+            print(predict.shape)
+            # 90, 3, 174 ,174
+            batch_mat.append(torch.argmax(predict, dim=1).squeeze())
+        batch_result = torch.cat(batch_mat, dim=0)
+        print(batch_result.shape)
 
 if __name__ == '__main__':
+
     
     optimizers = {
         'adadelta': torch.optim.Adadelta,  # default lr=1.0
@@ -325,20 +370,16 @@ if __name__ == '__main__':
     parser.add_argument('--imsize', default=256, type=int)
     parser.add_argument('--aug_prob', default=0.5, type=float)
     ''' For training '''
-    parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--optimizer', default='adam', type=str)
-    parser.add_argument('--lr', default=0.01, type=float)
+    parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--lr_decay_rate', type=float, default=0.1,
                         help='decay rate for learning rate')
     parser.add_argument('--lr_decay_epochs', type=str, default='50,100,150',
                         help='where to decay lr, can be a list')
     parser.add_argument('--l2reg', default=1e-5, type=float)
     parser.add_argument('--use_bilinear', default=False, type=float)
-    ''' For inference '''
-    parser.add_argument('--inference', default=False, type=bool)
-    parser.add_argument('--use_crf', default=False, type=bool)
-    parser.add_argument('--checkpoint', default=None, type=str)
     ''' For environment '''
     parser.add_argument('--backend', default=False, type=bool)
     parser.add_argument('--cosine', action='store_true',
@@ -348,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument('--multi_gpu', default=None, type=str, help='on, off')
     opt = parser.parse_args()
     
-    opt.model_name = 'unet_bilinear' if opt.use_bilinear else 'unet'
+    opt.model_name = 'resnet34'
     opt.optimizer = optimizers[opt.optimizer]
     opt.device = torch.device(opt.device) if opt.device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     opt.multi_gpu = opt.multi_gpu if opt.multi_gpu else 'on' if torch.cuda.device_count() > 1 else 'off'
@@ -358,7 +399,7 @@ if __name__ == '__main__':
         
     else:
         label_str = "label"
-        opt.batch_size = 32
+        # opt.batch_size = 32
     
     opt.impaths = {
         'train': os.path.join('.', opt.impath, 'train'),
@@ -381,7 +422,5 @@ if __name__ == '__main__':
         mpl.use('Agg')
     
     ins = Instructor(opt)
-    if opt.inference:
-        ins.inference()
-    else:
-        ins.run()
+    #ins.dev_eval(opt)
+    ins.run()

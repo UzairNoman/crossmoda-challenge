@@ -139,4 +139,6 @@ state_dict/*
 input/*
 output/*
 val_subset/*
+challenge/weights/*
+challenge/syn_result/*
 

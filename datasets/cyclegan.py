@@ -25,7 +25,7 @@ class CycleGANDataset(Dataset):
         super().__init__(**kwargs)
 
         if is_train:
-            subdir_a = 'synt_trainA'
+            subdir_a = 'training_source_syn'
             subdir_b = 'trainB'
         else:
             subdir_a = 'synt_testA'
@@ -115,14 +115,16 @@ class CycleGANDataset(Dataset):
         else:
             path_a = self._sample_image(self._imgs_a, index)
             #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
-            type = "hrT2" if "hrT2" in path_a else "ceT1"     
+            type = "hrT2" if "hrT2" in path_a else "ceT1"  
             label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace(type,'Label').replace('jpeg','npy')
             label = np.load(label_a)
             to_tensor = transforms.ToTensor()
             label = to_tensor(label)
+            pad = transforms.Pad(25)
+            label = pad(label)
             #label = load_images([label_a], self._transform,label=True)
             #path_b = self._sample_image(self._imgs_b, index)
         element = {'image': load_images([path_a], self._transform), 'label': label}
-        if self.is_test: element['file_name'] = path_a[path_a.rfind('cross'):]
+        element['file_name'] = path_a[path_a.rfind('cross'):]
         return element
         #return load_images([path_a, path_b], self._transform)

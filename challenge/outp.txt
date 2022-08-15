@@ -1,0 +1,4 @@
+Device: cuda
+checkpoint resnet34_dice0.7716_best654734.pt has been loaded
+tensor([1.0000e+00, 1.0000e+00, 1.0000e+00,  ..., 1.5562e-18, 1.8158e-18,
+        8.1632e-14], device='cuda:0', grad_fn=<IndexBackward0>)

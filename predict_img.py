@@ -18,7 +18,7 @@ import numpy as np
 def i_t_i_translation():
     
         device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
         config = args.config
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
@@ -77,7 +77,7 @@ class Instructor:
             
             file = features.detach().cpu().numpy()
             file_save = file.squeeze()
-            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/synt_trainA/{fname[0]}", np.array(file_save), cmap='gray')  
+            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/training_source_syn/{fname[0]}", np.array(file_save), cmap='gray')  
 
         return 0
     

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from unittest import result
 import torch
 import argparse
 import matplotlib as mpl
@@ -14,11 +15,15 @@ from uvcgan.torch.funcs import get_torch_device_smart, seed_everything
 from uvcgan.cgan import construct_model
 from uvcgan.config import Args
 import numpy as np
-
+from tqdm import tqdm
+import SimpleITK as sitk
+import monai
+import nibabel as nib
+# Use myenv when recieving CycleGAN has no attribute model !
 def i_t_i_translation():
     
         device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256_org/')
         config = args.config
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
@@ -53,15 +58,6 @@ class BCELoss2d(nn.Module):
         target = target.view(-1)
         return self.bce_loss(predict, target)
 
-def dice_coeff(predict, target):
-    smooth = 0.001
-    batch_size = predict.size(0)
-    predict = (predict > 0.5).float()
-    m1 = predict.view(batch_size, -1)
-    m2 = target.view(batch_size, -1)
-    intersection = (m1 * m2).sum(-1)
-    return ((2.0 * intersection + smooth) / (m1.sum(-1) + m2.sum(-1) + smooth)).mean()
-
 class Instructor:
     ''' Model training and evaluation '''
     def __init__(self, opt):
@@ -71,13 +67,14 @@ class Instructor:
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         gen_ab.eval()
         for i_batch, sample_batched in enumerate(train_dataloader):
-            inputs, target, fname = sample_batched['image'].to(self.opt.device), sample_batched['label'].to(self.opt.device), sample_batched['file_name']
+            inputs, fname = sample_batched['image'].to(self.opt.device), sample_batched['file_name']
             with torch.no_grad():
                 features = gen_ab(inputs)
             
             file = features.detach().cpu().numpy()
             file_save = file.squeeze()
-            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/training_source_syn/{fname[0]}", np.array(file_save), cmap='gray')  
+            print(np.array(file_save).shape)
+            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/nifti_syn/{fname[0]}", np.array(file_save), cmap='gray')  
 
         return 0
     
@@ -88,6 +85,41 @@ class Instructor:
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         gen_ab = i_t_i_translation()
         train_loss = self._train(dl,gen_ab)
+        print("Finish..")
+
+    def predict(self):
+        type = "ceT1"
+        base_path = '/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training'
+        input_dir = f"{base_path}/training_source"
+        output_dir = f"{base_path}/nifti_syn"
+        complete_input_folder = sorted(os.listdir(input_dir))
+        gen_ab = i_t_i_translation()
+        gen_ab.eval()
+        for fname in tqdm(complete_input_folder):
+            if not fname.endswith(f"{type}.nii.gz"):
+                continue
+
+
+            n_file = os.path.join(input_dir, fname)
+            # res = nib.load(f'{n_file}') # 512,512,120 # vertical MRI
+            # np_arr = res.get_fdata() 
+            inputImage = sitk.ReadImage(n_file) # 120,512,512 # horizontal MRI
+            np_arr =sitk.GetArrayFromImage(inputImage).astype(np.float32)
+            tensor = torch.tensor(np_arr).float()#.permute(2,0,1)
+            resize = 256    
+            # resize_fn = transforms.Resize((resize, resize))
+            resize_fn = monai.transforms.Resize((resize, resize))
+            image = resize_fn(tensor)
+            cc = transforms.CenterCrop((224,224))
+            image = cc(image)
+
+            batch = image.unsqueeze(1)
+            # 120,1,244,244
+            with torch.no_grad():
+                features = gen_ab(batch)
+            reshaped = features.detach().cpu().squeeze(1)
+            result_image = sitk.GetImageFromArray(reshaped)
+            sitk.WriteImage(result_image, f'{output_dir}/{fname}.nii.gz')
         print("Finish..")
     
     
@@ -153,4 +185,5 @@ if __name__ == '__main__':
     # if opt.inference:
     #     ins.inference()
     # else:
-    ins.run()
+    ins.predict()
+    # ins.run()

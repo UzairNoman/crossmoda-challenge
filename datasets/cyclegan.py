@@ -25,7 +25,7 @@ class CycleGANDataset(Dataset):
         super().__init__(**kwargs)
 
         if is_train:
-            subdir_a = 'training_source_syn'
+            subdir_a = 'training_source_all_slices'
             subdir_b = 'trainB'
         else:
             subdir_a = 'synt_testA'
@@ -57,21 +57,6 @@ class CycleGANDataset(Dataset):
     def reseed(self, seed):
         self._prg = np.random.default_rng(seed)
 
-    def preprocessing(self,path,force_recreate):
-        input_dir = r"crossmoda2022_subset_validation"
-        output_dir = r"val_subset"
-        full_input_dir =  os.path.join(path, input_dir)
-        full_output_dir = os.path.join(path, output_dir)
-        axis = 2
-        do_filter = False
-        resize = 256
-        if(dir_empty(full_output_dir) or force_recreate == True):
-            os.makedirs(full_output_dir, exist_ok=True)
-            complete_input_folder = sorted(os.listdir(full_input_dir))
-            self._imgs_a = nifti_to_2d_slices(full_input_dir, full_output_dir, axis, do_filter, resize,folder=complete_input_folder,type="hrT2")
-        else:
-            print("Output dir not empty")
-        return full_output_dir
 
     @staticmethod
     def find_in_dir(path,labels = False):
@@ -116,15 +101,15 @@ class CycleGANDataset(Dataset):
             path_a = self._sample_image(self._imgs_a, index)
             #label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].split('ceT1')[0] + 'Label.nii.gz'
             type = "hrT2" if "hrT2" in path_a else "ceT1"  
-            label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace(type,'Label').replace('jpeg','npy')
-            label = np.load(label_a)
-            to_tensor = transforms.ToTensor()
-            label = to_tensor(label)
-            pad = transforms.Pad(25)
-            label = pad(label)
+            # label_a = self.label_path + '/' + path_a[path_a.rfind('cross'):].replace(type,'Label').replace('jpeg','npy')
+            # label = np.load(label_a)
+            # to_tensor = transforms.ToTensor()
+            # label = to_tensor(label)
+            # pad = transforms.Pad(25)
+            # label = pad(label)
             #label = load_images([label_a], self._transform,label=True)
             #path_b = self._sample_image(self._imgs_b, index)
-        element = {'image': load_images([path_a], self._transform), 'label': label}
+        element = {'image': load_images([path_a], self._transform)}#, 'label': label}
         element['file_name'] = path_a[path_a.rfind('cross'):]
         return element
         #return load_images([path_a, path_b], self._transform)

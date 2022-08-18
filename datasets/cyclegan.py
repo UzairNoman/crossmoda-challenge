@@ -105,8 +105,6 @@ class CycleGANDataset(Dataset):
             # label = np.load(label_a)
             # to_tensor = transforms.ToTensor()
             # label = to_tensor(label)
-            # pad = transforms.Pad(25)
-            # label = pad(label)
             #label = load_images([label_a], self._transform,label=True)
             #path_b = self._sample_image(self._imgs_b, index)
         element = {'image': load_images([path_a], self._transform)}#, 'label': label}

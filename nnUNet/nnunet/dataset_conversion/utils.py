@@ -64,10 +64,12 @@ def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str
 
     json_dict['numTraining'] = len(train_identifiers)
     json_dict['numTest'] = len(test_identifiers)
-    json_dict['training'] = [
-        {'image': "./imagesTr/%s.nii.gz" % i, "label": "./labelsTr/%s.nii.gz" % i.replace('ceT1','Label')} for i
-        in
-        train_identifiers]
+    json_dict['training'] = []
+    for i in train_identifiers:
+        if("hrT2" in i):
+            json_dict['training'].append({'image': "./imagesTr/%s.nii.gz" % i, "label": "./labelsTr/%s.nii.gz" % i.replace('hrT2','Label')})
+        else:
+            json_dict['training'].append({'image': "./imagesTr/%s.nii.gz" % i, "label": "./labelsTr/%s.nii.gz" % i.replace('ceT1','Label')})
     json_dict['test'] = ["./imagesTs/%s.nii.gz" % i for i in test_identifiers]
 
     if not output_file.endswith("dataset.json"):

@@ -23,18 +23,13 @@ import nibabel as nib
 def i_t_i_translation():
     
         device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256_org/')
+        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
         config = args.config
         model = construct_model(
         args.savedir, args.config, is_train = False, device = device
         )
-        # for m in model.models:
-        #   m = torch.nn.DataParallel(m)
-
-        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
-        # state_dict = ckpt
-
-        epoch = -1
+ 
+        epoch = 200
 
         if epoch == -1:
             epoch = max(model.find_last_checkpoint_epoch(), 0)
@@ -117,8 +112,41 @@ class Instructor:
             # 120,1,244,244
             with torch.no_grad():
                 features = gen_ab(batch)
-            reshaped = features.detach().cpu().squeeze(1)
-            result_image = sitk.GetImageFromArray(reshaped)
+            feature_sq = features.detach().cpu().squeeze(1)
+            result_image = sitk.GetImageFromArray(feature_sq)
+            sitk.WriteImage(result_image, f'{output_dir}/{fname}.nii.gz')
+        print("Finish..")
+
+    def transform_labels(self):
+        print("Transforming labels")
+        type = "Label"
+        base_path = '/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training'
+        input_dir = f"{base_path}/training_source"
+        output_dir = f"{base_path}/rs_cc_nifti_labels"
+        complete_input_folder = sorted(os.listdir(input_dir))
+        for fname in tqdm(complete_input_folder):
+            if not fname.endswith(f"{type}.nii.gz"):
+                continue
+            n_file = os.path.join(input_dir, fname)
+            # res = nib.load(f'{n_file}') # 512,512,120 # vertical MRI
+            # np_arr = res.get_fdata() 
+            inputImage = sitk.ReadImage(n_file) # 120,512,512 # horizontal MRI
+            np_arr =sitk.GetArrayFromImage(inputImage).astype(np.float32)
+            tensor = torch.tensor(np_arr).float()#.permute(2,0,1)
+            resize = 256    
+            # resize_fn = transforms.Resize((resize, resize))
+            # print(tensor.shape)
+            resize_fn = monai.transforms.Resize((resize, resize))
+            image = resize_fn(tensor)
+            # print(f'+>> {image.shape}')
+            cc = transforms.CenterCrop((224,224))
+            cropped_img = cc(image)
+
+            cropped_img[(cropped_img > 0) & (cropped_img < 1)] = 1
+            cropped_img[cropped_img > 1] = 2
+            # print(f'=+++ {cropped_img.shape}')
+
+            result_image = sitk.GetImageFromArray(cropped_img)
             sitk.WriteImage(result_image, f'{output_dir}/{fname}.nii.gz')
         print("Finish..")
     
@@ -185,5 +213,6 @@ if __name__ == '__main__':
     # if opt.inference:
     #     ins.inference()
     # else:
-    ins.predict()
+    # ins.predict()
     # ins.run()
+    ins.transform_labels()

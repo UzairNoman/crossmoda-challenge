@@ -29,6 +29,7 @@ from torch.nn import functional as F
 from sklearn.model_selection import train_test_split
 from torch.optim.lr_scheduler import *
 import copy
+from utils.helper import i_t_i_translation
 def set_loaders(opt):
     if opt.dataset == 'cat':
         # init train, val, test sets
@@ -81,29 +82,6 @@ def adjust_learning_rate(args,optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def i_t_i_translation():
-    
-        device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
-        config = args.config
-        model = construct_model(
-        args.savedir, args.config, is_train = False, device = device
-        )
-        # for m in model.models:
-        #   m = torch.nn.DataParallel(m)
-
-        epoch = -1
-
-        if epoch == -1:
-            epoch = max(model.find_last_checkpoint_epoch(), 0)
-
-        print("Load checkpoint at epoch %s" % epoch)
-
-        seed_everything(args.config.seed)
-        model.load(epoch)
-        gen_ab = model.models.gen_ab
-        gen_ab.eval()
-        return gen_ab.cuda()
 
 class BCELoss2d(nn.Module):
     
@@ -193,22 +171,11 @@ class Instructor:
     
     def _train(self, train_dataloader, criterion, optimizer,opt,arr):
         self.model.train()
-        arr = []
+
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         for i_batch, sample_batched in enumerate(train_dataloader):
             inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device) # .long()
             predict = self.model(inputs)
-            #target = target.squeeze()
-            # torch.set_printoptions(profile="full")
-            # print(f"_> {predict}")
-            # print(f"_> {torch.sum(predict, dim=(1,2,3))}")
-            arr.append(torch.sum(predict, dim=(1,2)))
-            # target_idx = target
-            # target = one_hot(target_idx[:, None, ...], num_classes=3)
-            # print(target.shape)
-            # target = target.requires_grad_().to(self.opt.device)
-                
-
             optimizer.zero_grad()
             
             loss = criterion(predict, target)
@@ -220,8 +187,7 @@ class Instructor:
    
             sys.stdout.flush()
         print()
-        batch_result = torch.cat(arr)
-        return train_loss / n_total, batch_result
+        return train_loss / n_total
     
     def _evaluation(self, val_dataloader, criterion):
         self.model.eval()
@@ -230,14 +196,10 @@ class Instructor:
             for sample_batched in val_dataloader:
                 inputs, target = sample_batched['image'].float().to(self.opt.device), sample_batched[label_str].long().to(self.opt.device)
                 predict = self.model(inputs)
-                #target = target.squeeze()
                 loss = criterion(predict, target)       
                 loss_for_metric = DiceLoss(include_background=False,to_onehot_y=True)
                 dice_metric = 1 - loss_for_metric(predict, target)
-                # etc = torchmetrics.functional.dice(torch.argmax(predict, dim=1).unsqueeze(dim=1), target,average = 'none',ignore_index=0,num_classes=2, zero_division=0 )
-                # print(etc)
 
-                
                 target = target.squeeze()
                 target = F.one_hot(target, num_classes=3)
                 target = target.permute(0, 3, 1,2)
@@ -266,35 +228,30 @@ class Instructor:
         writer = SummaryWriter(f'{opt.tb_path}/{opt.dataset}-{folder_counter}_{opt.epochs}')
         _params = filter(lambda p: p.requires_grad, self.model.parameters())
         optimizer = torch.optim.Adam(_params, lr=self.opt.lr, weight_decay=self.opt.l2reg)
-        #optimizer = torch.optim.SGD(_params, lr=self.opt.lr,weight_decay=1e-4,momentum=0.9)
-        #criterion = BCELoss2d()#MULTICLASS_MODE
+
         criterion = DiceLoss(include_background=False,to_onehot_y=True)
+
+        # Other losses you can try
         #criterion = FocalTversky()
-
         #criterion = TverskyLoss(include_background=False, to_onehot_y=True)
-        # criterion = DiceFocalLoss(include_background=False, to_onehot_y=True)
-        # dist_mat = np.array([[0.0, 1.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0]], dtype=np.float32)
-        # criterion = GeneralizedWassersteinDiceLoss(dist_matrix=dist_mat)
-
+        #criterion = DiceFocalLoss(include_background=False, to_onehot_y=True)
         #criterion = smp.losses.DiceLoss(smp.losses.MULTICLASS_MODE, from_logits=True)
         #criterion = torch.nn.CrossEntropyLoss(ignore_index=1)
+
         dl, val_dl = set_loaders(opt)
-        #gen_ab = i_t_i_translation()
         self._reset_records()
         # scheduler1 = ExponentialLR(optimizer, gamma=0.9)
         # scheduler1 = CosineAnnealingLR(optimizer,T_max=10, eta_min=0)
         patience = 30
         vs_dice, c_dice = 0,0
         best_model, best_epoch, best_dev_acc = None, 0, -np.inf
-        batch_res = []
         for epoch in range(self.opt.epochs):
             #adjust_learning_rate(opt, optimizer, epoch)
-            train_loss, batch_res = self._train(dl, criterion, optimizer,opt,batch_res)
+            train_loss = self._train(dl, criterion, optimizer,opt)
             # torch.set_printoptions(profile="full")
-            # print(f'=> Sample wis {batch_res}')
-            # print(f'=> Sample wise sum {torch.sum(batch_res, dim=(1,2,3))}')
             # scheduler1.step()
             val_loss, val_dice, new_vs_dice, new_c_dice = self._evaluation(val_dl, criterion)
+            # Early stopping
             if val_dice > best_dev_acc:
                 best_epoch = epoch
                 best_dev_acc = val_dice
@@ -302,7 +259,6 @@ class Instructor:
                 # We want to return the model from the best epoch, not from the last epoch
 
             if epoch - best_epoch > patience:
-                # print(f"==> last pred {print(torch.argmax(predict, dim=1).sum(dim=0))}")
                 break
 
 
@@ -319,14 +275,13 @@ class Instructor:
             writer.add_scalar("Cochlea Dice", c_dice,epoch)
             writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
-        path = './challenge/weights/{:s}_dice{:.4f}_best{:s}.pt'.format(self.opt.model_name, val_dice, str(time.time())[-6:])
+        os.mkdir("weights")
+        path = 'weights/{:s}_dice{:.4f}_best{:s}.pt'.format(self.opt.model_name, val_dice, str(time.time())[-6:])
         if self.opt.multi_gpu == 'on':
             torch.save(best_model.module.state_dict(), path)
         else:
             torch.save(best_model.state_dict(), path)
         print(f'Saved model with Early Stopping: {path}')
-
-        # self._draw_records()
 
     def dev_eval(self,opt):
         opt.checkpoint = 'resnet34_no_0008_dice0.7728_best039548.pt'
@@ -346,7 +301,6 @@ class Instructor:
             # 90, 3, 174 ,174
             batch_mat.append(torch.argmax(predict, dim=1).squeeze())
         batch_result = torch.cat(batch_mat, dim=0)
-        print(batch_result.shape)
 
 if __name__ == '__main__':
 
@@ -413,10 +367,6 @@ if __name__ == '__main__':
     repo_root = os.path.abspath(os.getcwd())
     opt.data_root = os.path.join(repo_root, "../data/crossmoda2022_training/")
 
-
-    for folder in ['figs', 'logs', 'state_dict', 'predicts']:
-        if not os.path.exists(folder):
-            os.mkdir(folder)
     
     if opt.backend: # Disable the matplotlib window
         mpl.use('Agg')

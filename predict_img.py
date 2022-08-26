@@ -19,29 +19,7 @@ from tqdm import tqdm
 import SimpleITK as sitk
 import monai
 import nibabel as nib
-# Use myenv when recieving CycleGAN has no attribute model !
-def i_t_i_translation():
-    
-        device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
-        config = args.config
-        model = construct_model(
-        args.savedir, args.config, is_train = False, device = device
-        )
- 
-        epoch = 200
-
-        if epoch == -1:
-            epoch = max(model.find_last_checkpoint_epoch(), 0)
-
-        print("Load checkpoint at epoch %s" % epoch)
-
-        seed_everything(args.config.seed)
-        model.load(epoch)
-        gen_ab = model.models.gen_ab
-        gen_ab.eval()
-        return gen_ab.cuda()
-
+from utils.helper import i_t_i_translation
 class BCELoss2d(nn.Module):
     
     def __init__(self):
@@ -58,7 +36,7 @@ class Instructor:
     def __init__(self, opt):
         self.opt = opt
     
-    def _train(self, train_dataloader,gen_ab):
+    def predict_in_image_format(self, train_dataloader,gen_ab):
         train_loss, n_total, n_batch = 0, 0, len(train_dataloader)
         gen_ab.eval()
         for i_batch, sample_batched in enumerate(train_dataloader):
@@ -69,22 +47,20 @@ class Instructor:
             file = features.detach().cpu().numpy()
             file_save = file.squeeze()
             print(np.array(file_save).shape)
-            plt.imsave(f"/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/nifti_syn/{fname[0]}", np.array(file_save), cmap='gray')  
+            plt.imsave(f"~/data/crossmoda2022_training/nifti_syn/{fname[0]}", np.array(file_save), cmap='gray')  
 
         return 0
     
-    
-    def run(self):
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        #val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+    def predict_syn_imgs(self):
+        ds = CycleGANDataset('~/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.CenterCrop((224,224)),transforms.Grayscale(num_output_channels=1),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         gen_ab = i_t_i_translation()
-        train_loss = self._train(dl,gen_ab)
+        train_loss = self.predict_in_image_format(dl,gen_ab)
         print("Finish..")
 
     def predict(self):
         type = "ceT1"
-        base_path = '/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training'
+        base_path = '~/data/crossmoda2022_training'
         input_dir = f"{base_path}/training_source"
         output_dir = f"{base_path}/nifti_syn"
         complete_input_folder = sorted(os.listdir(input_dir))
@@ -120,7 +96,7 @@ class Instructor:
     def transform_labels(self):
         print("Transforming labels")
         type = "Label"
-        base_path = '/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training'
+        base_path = '~/data/crossmoda2022_training'
         input_dir = f"{base_path}/training_source"
         output_dir = f"{base_path}/rs_cc_nifti_labels"
         complete_input_folder = sorted(os.listdir(input_dir))
@@ -138,13 +114,11 @@ class Instructor:
             # print(tensor.shape)
             resize_fn = monai.transforms.Resize((resize, resize))
             image = resize_fn(tensor)
-            # print(f'+>> {image.shape}')
             cc = transforms.CenterCrop((224,224))
             cropped_img = cc(image)
 
             cropped_img[(cropped_img > 0) & (cropped_img < 1)] = 1
             cropped_img[cropped_img > 1] = 2
-            # print(f'=+++ {cropped_img.shape}')
 
             result_image = sitk.GetImageFromArray(cropped_img)
             sitk.WriteImage(result_image, f'{output_dir}/{fname}.nii.gz')
@@ -178,10 +152,6 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--l2reg', default=1e-5, type=float)
     parser.add_argument('--use_bilinear', default=False, type=float)
-    ''' For inference '''
-    parser.add_argument('--inference', default=False, type=bool)
-    parser.add_argument('--use_crf', default=False, type=bool)
-    parser.add_argument('--checkpoint', default=None, type=str)
     ''' For environment '''
     parser.add_argument('--backend', default=False, type=bool)
     parser.add_argument('--prefetch', default=False, type=bool)
@@ -210,9 +180,9 @@ if __name__ == '__main__':
         mpl.use('Agg')
     
     ins = Instructor(opt)
-    # if opt.inference:
-    #     ins.inference()
-    # else:
+    # get us sythetic T2 given ceT1
     # ins.predict()
-    # ins.run()
+    # get us synthetic T2 in graycale img form (not viable)
+    # ins.predict_syn_imgs()
+    # nifti to nifti labels (compatible to images e.g cropped and resized) transformation
     ins.transform_labels()

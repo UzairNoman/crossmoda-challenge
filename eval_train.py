@@ -1,14 +1,7 @@
 from pickletools import optimize
 from uvcgan.config import Args
 import torch
-import fnmatch
 import os
-import random
-import shutil
-import string
-import time
-from abc import abstractmethod
-from collections import defaultdict
 from time import sleep
 
 import numpy as np
@@ -29,6 +22,7 @@ import math
 import tensorboard_logger as tb_logger
 import pandas as pd
 from tqdm import tqdm
+from utils.helper import i_t_i_translation
 
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
@@ -129,33 +123,6 @@ class AverageMeter():
         self.avg = self.sum / self.count
 
 
-def i_t_i_translation():
-    
-        device = get_torch_device_smart()
-        args   = Args.load('/dss/dsshome1/lxc09/ra49tad2/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/')
-        config = args.config
-        model = construct_model(
-        args.savedir, args.config, is_train = False, device = device
-        )
-        # for m in model.models:
-        #   m = torch.nn.DataParallel(m)
-
-        # ckpt = torch.load(os.path.join('/dss/dsshome1/lxc09/ra49tad2/crossmoda-challenge/uvcgan/outdir/selfie2anime/model_d(cyclegan)_m(cyclegan)_d(basic)_g(vit-unet)_cyclegan_vit-unet-12-none-lsgan-paper-cycle_high-256/net_gen_ab.pth'))
-        # state_dict = ckpt
-
-        epoch = -1
-
-        if epoch == -1:
-            epoch = max(model.find_last_checkpoint_epoch(), 0)
-
-        print("Load checkpoint at epoch %s" % epoch)
-
-        seed_everything(args.config.seed)
-        model.load(epoch)
-        gen_ab = model.models.gen_ab
-        gen_ab.eval()
-        return gen_ab.cuda()
-
 def adjust_learning_rate(args, optimizer, epoch):
     lr = args.learning_rate
     if args.cosine:
@@ -178,10 +145,6 @@ def warmup_learning_rate(args, epoch, batch_id, total_batches, optimizer):
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
-
-
-
-        
 
 def set_optimizer(model):
     return torch.optim.Adam(model.parameters(), lr=0.0001)
@@ -247,43 +210,6 @@ def train(train_loader, model, segmentation, criterion, optimizer, epoch,opt,log
     }
     return history
 
-# def validate(val_loader, model, classifier, criterion, opt):
-#     """validation"""
-#     model.eval()
-#     classifier.eval()
-
-#     with torch.no_grad():
-#         end = time.time()
-#         for idx, (images, labels) in enumerate(val_loader):
-#             images = images.float().cuda()
-#             labels = labels.cuda()
-#             bsz = labels.shape[0]
-
-#             # forward
-#             output = classifier(model.encoder(images))
-#             loss = criterion(output, labels)
-
-#             # update metric
-#             losses.update(loss.item(), bsz)
-#             acc1, acc5 = accuracy(output, labels, topk=(1, 5))
-#             top1.update(acc1[0], bsz)
-
-#             # measure elapsed time
-#             batch_time.update(time.time() - end)
-#             end = time.time()
-
-#             if idx % opt.print_freq == 0:
-#                 print('Test: [{0}/{1}]\t'
-#                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-#                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-#                       'Acc@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
-#                     idx, len(val_loader), batch_time=batch_time,
-#                     loss=losses, top1=top1))
-
-#     print(' * Acc@1 {top1.avg:.3f}'.format(top1=top1))
-#     return losses.avg, top1.avg
-
-
 
 def set_loaders(opt):
     if opt.dataset == 'cat':
@@ -307,8 +233,8 @@ def set_loaders(opt):
         val_dl = DataLoader(valid_dataset, batch_size=16, shuffle=False)
         test_dl = DataLoader(test_dataset, batch_size=16, shuffle=False)
     else:
-        ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
-        val_ds = CycleGANDataset('/dss/dsshome1/lxc09/ra49tad2/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        ds = CycleGANDataset('~/data/crossmoda2022_training/',is_train=True,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
+        val_ds = CycleGANDataset('~/data/crossmoda2022_training/',is_train=False,transform = transforms.Compose([transforms.Grayscale(num_output_channels=1),transforms.CenterCrop((206,206)),transforms.ToTensor()])) # transforms.Normalize(0.0085,0.2753)
         dl = DataLoader(ds, batch_size=opt.batch_size,shuffle=False)
         val_dl = DataLoader(val_ds, batch_size=opt.batch_size,shuffle=False)
 

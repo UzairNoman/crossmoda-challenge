@@ -51,7 +51,7 @@ if __name__ == '__main__':
     data_info = nifti_to_2d_slices(full_input_dir, full_syn_result, axis, do_filter,folder=complete_input_folder,type=type)
 
     opt = {}
-    opt["checkpoint"] = 'resnet34_dice0.7716_best654734.pt'
+    opt["checkpoint"] = 'resnet34_fcl_no_dice0.7776_best162757.pt'
     opt['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
     opt["model_name"] = 'resnet34'
     print(f"Device: {opt['device']}")

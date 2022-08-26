@@ -4,8 +4,8 @@ More comprehensively, we divide the project into two phases. First, we used one 
 
 
 # Table Of Contents
--  [Installation](#in-a-nutshell)
--  [Image-to-Image Translation](#in-a-nutshell)
+-  [Installation](#installation)
+-  [Image-to-Image Translation](#i-to-i)
 -  [Code Structure](#code-structure)
 -  [Contributing](#contributing)
 -  [Future works](#future-works)

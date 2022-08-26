@@ -30,7 +30,6 @@ def nifti_to_2d_slices(input_folder: str, output_folder: str, axis: int, filtere
         #np_data.shape[axis]
         for i in range(start,np_data.shape[axis] - end):
             
-
             image = np_data[:,:,i]
             # image.shape (512, 512)
 

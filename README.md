@@ -41,7 +41,7 @@ ins = Instructor(opt)
 ins.transform_labels()
 ```
 # Segmentation
-For segmentation, you must follow the nnUNet folder structure for inputting the input, run the `rename_for_single_modality` function in helper.py,  `generate_dataset_json` function from nnUNet's utils. Then run the following commands (don't forget to specify your input and output folder for inference command):
+For segmentation, you must follow the nnUNet folder structure for inputting the input, run the `rename_for_single_modality` function in helper.py,  `generate_dataset_json` function (example present in playground.ipynb) from nnUNet's utils. Then run the following commands (don't forget to specify your input and output folder for inference command):
 ```console
 foo@bar:~/crossmoda-challenge/uvcgan$ cd ..
 foo@bar:~/crossmoda-challenge$ nnUNet_plan_and_preprocess -t 001 --verify_dataset_integrity

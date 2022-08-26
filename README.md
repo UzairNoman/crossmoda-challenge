@@ -75,7 +75,6 @@ We used Docker to containerize the code. The shipped code contains just an infer
 ```console
 foo@bar:~$ docker run --rm --gpus all  -v [input directory]:/input/:ro -v [output directo-ry]:/output -it [image name]
 ```
-
 The code requires GPU which can be utilized into the container through --gpus all parameter. Dockerhub image name is uzairnoman/crossmoda:latest.
 
 

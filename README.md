@@ -6,10 +6,12 @@ More comprehensively, we divide the project into two phases. First, we used one 
 # Table Of Contents
 -  [Installation](#installation)
 -  [Image-to-Image Translation](#image-to-image-translation)
+-  [Segmentation](#segmentation)
 -  [Code Structure](#code-structure)
--  [Contributing](#contributing)
 -  [Future work](#future-work)
 -  [Acknowledgments](#acknowledgments)
+-  [Contributors](#contributors)
+-  [Contributing](#contributing)
 
 # Installation   
 You need first and foremost to run 
@@ -69,9 +71,6 @@ The code includes some helpful files for other usecases then this one. Feel free
 # Future work
 We really think that normalizing the dataset before working would have improved the results and training routine. Extensive hyperparamter tuning would have helped as well.
 
-# Contributing
-Any kind of enhancement or contribution is welcomed.
-
 # Acknowledgments
 - [nnUNet](https://github.com/MIC-DKFZ/nnUNet) (For segmentation in 3D)
 - [UVCGAN](https://github.com/LS4GAN/uvcgan) (For image to image translation)
@@ -79,7 +78,10 @@ Any kind of enhancement or contribution is welcomed.
 - [MONAI](https://github.com/Project-MONAI/MONAIh) (Open source library for 3D image processing for medical datasets)
 
 
-# Contributers
+# Contributors
 - [Mina Rezaei](https://github.com/MinaRe)
 - [Amirhossein Vahidi](https://github.com/amirvhd)
+
+# Contributing
+Any kind of enhancement or contribution is welcomed.
 

@@ -5,10 +5,10 @@ More comprehensively, we divide the project into two phases. First, we used one 
 
 # Table Of Contents
 -  [Installation](#installation)
--  [Image-to-Image Translation](#i-to-i)
+-  [Image-to-Image Translation](#image-to-image-translation)
 -  [Code Structure](#code-structure)
 -  [Contributing](#contributing)
--  [Future works](#future-works)
+-  [Future work](#future-work)
 -  [Acknowledgments](#acknowledgments)
 
 # Installation   

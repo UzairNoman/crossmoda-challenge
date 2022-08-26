@@ -17,7 +17,6 @@ import argparse
 from nnUNet.nnunet.paths import default_plans_identifier, network_training_output_dir, default_cascade_trainer, default_trainer
 from nnUNet.nnunet.inference import predict_simple
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"

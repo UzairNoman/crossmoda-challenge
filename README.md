@@ -68,6 +68,18 @@ The code includes some helpful files for other usecases then this one. Feel free
 │
 ├── predict_img.py - contain predict() and transform_labels() which makes the synthetic images and compatible labels (cropped and resized to have the same size as     |                     synthesized output).
 ```
+
+# Docker Image for inference
+We used Docker to containerize the code. The shipped code contains just an inference part, to keep the docker image as light as possible. 
+
+```console
+foo@bar:~$ docker run --rm --gpus all  -v [input directory]:/input/:ro -v [output directo-ry]:/output -it [image name]
+```
+
+The code requires GPU which can be utilized into the container through --gpus all parameter. Dockerhub image name is uzairnoman/crossmoda:latest.
+
+
+
 # Future work
 We really think that normalizing the dataset before working would have improved the results and training routine. Extensive hyperparamter tuning would have helped as well.
 
